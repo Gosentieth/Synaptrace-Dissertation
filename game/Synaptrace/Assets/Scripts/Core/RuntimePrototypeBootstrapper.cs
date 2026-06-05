@@ -1,0 +1,525 @@
+using Synaptrace.Adaptation;
+using Synaptrace.Player;
+using Synaptrace.Systems;
+using Synaptrace.Telemetry;
+using Synaptrace.UI;
+using UnityEngine;
+
+namespace Synaptrace.Core
+{
+    [DefaultExecutionOrder(-1000)]
+    public sealed class RuntimePrototypeBootstrapper : MonoBehaviour
+    {
+        [SerializeField] private bool buildOnAwake = true;
+
+        private Sprite squareSprite;
+        private Sprite circleSprite;
+        private Sprite softCircleSprite;
+        private Sprite triangleSprite;
+        private PhysicsMaterial2D noFrictionMaterial;
+        private Transform levelRoot;
+        private Transform environmentRoot;
+        private Transform platformRoot;
+        private Transform hazardRoot;
+        private Transform goalRoot;
+
+        private void Awake()
+        {
+            if (!buildOnAwake)
+            {
+                return;
+            }
+
+            EnsureGameSystems();
+
+            if (FindFirstObjectByType<PlayerController>() != null)
+            {
+                return;
+            }
+
+            BuildPrototypeLevel();
+        }
+
+        private void EnsureGameSystems()
+        {
+            GetOrAdd<TelemetryTracker>(gameObject);
+            GetOrAdd<DifficultyManager>(gameObject);
+            GetOrAdd<GameManager>(gameObject);
+            GetOrAdd<LevelManager>(gameObject);
+            GetOrAdd<PrototypeHUD>(gameObject);
+        }
+
+        private void BuildPrototypeLevel()
+        {
+            CreateRuntimeSprites();
+            CreateLevelContainers();
+
+            Vector3 spawnPosition = new Vector3(-17.2f, -1.42f, 0f);
+            PlayerController player = CreatePlayer(spawnPosition);
+
+            CreateSpawnPoint(player.transform.position);
+            CreateBackground();
+            CreateStartBeacon(player.transform.position);
+            CreatePlatformLayout();
+            CreateGoal();
+            ConfigureCamera(player.transform);
+        }
+
+        private void CreateRuntimeSprites()
+        {
+            squareSprite = CreateFilledSprite("Synaptrace Square Sprite", 16);
+            circleSprite = CreateCircleSprite("Synaptrace Circle Sprite", 32, false);
+            softCircleSprite = CreateCircleSprite("Synaptrace Soft Glow Sprite", 64, true);
+            triangleSprite = CreateTriangleSprite("Synaptrace Spike Sprite", 32);
+            noFrictionMaterial = CreateNoFrictionMaterial();
+        }
+
+        private void CreateLevelContainers()
+        {
+            levelRoot = CreateContainer("Prototype Level - Expanded Route", null);
+            environmentRoot = CreateContainer("Background - Simulation Grid", levelRoot);
+            platformRoot = CreateContainer("Gameplay Sections - Adaptive Ready", levelRoot);
+            hazardRoot = CreateContainer("Hazards", levelRoot);
+            goalRoot = CreateContainer("Goal", levelRoot);
+        }
+
+        private PlayerController CreatePlayer(Vector3 position)
+        {
+            GameObject playerObject = new GameObject("Player");
+            playerObject.transform.position = position;
+            playerObject.transform.SetParent(levelRoot, true);
+
+            GameObject visualRoot = new GameObject("Visual Root - Animation Ready");
+            visualRoot.transform.SetParent(playerObject.transform, false);
+
+            CreateChildSprite(visualRoot.transform, "Avatar Glow", softCircleSprite, new Vector3(0f, 0.05f, 0f), new Vector3(1.55f, 1.55f, 1f), new Color(0.0f, 0.88f, 1f, 0.2f), 8);
+            CreateChildSprite(visualRoot.transform, "Suit Body", squareSprite, new Vector3(0f, -0.08f, 0f), new Vector3(0.58f, 0.82f, 1f), new Color(0.08f, 0.18f, 0.27f, 1f), 10);
+            CreateChildSprite(visualRoot.transform, "Suit Top Highlight", squareSprite, new Vector3(0f, 0.36f, 0f), new Vector3(0.52f, 0.09f, 1f), new Color(0.0f, 0.9f, 1f, 1f), 11);
+            CreateChildSprite(visualRoot.transform, "Core", circleSprite, new Vector3(0f, 0.02f, 0f), new Vector3(0.34f, 0.34f, 1f), new Color(0.12f, 1f, 0.78f, 1f), 12);
+            CreateChildSprite(visualRoot.transform, "Core Inner", circleSprite, new Vector3(0f, 0.02f, 0f), new Vector3(0.18f, 0.18f, 1f), new Color(0.95f, 1f, 1f, 1f), 13);
+            CreateChildSprite(visualRoot.transform, "Visor", squareSprite, new Vector3(0.16f, 0.26f, 0f), new Vector3(0.2f, 0.08f, 1f), new Color(0.88f, 1f, 1f, 1f), 13);
+            CreateChildSprite(visualRoot.transform, "Left Foot", squareSprite, new Vector3(-0.18f, -0.58f, 0f), new Vector3(0.18f, 0.14f, 1f), new Color(0.0f, 0.64f, 0.84f, 1f), 11);
+            CreateChildSprite(visualRoot.transform, "Right Foot", squareSprite, new Vector3(0.18f, -0.58f, 0f), new Vector3(0.18f, 0.14f, 1f), new Color(0.0f, 0.64f, 0.84f, 1f), 11);
+
+            Rigidbody2D body = playerObject.AddComponent<Rigidbody2D>();
+            body.gravityScale = 3.2f;
+            body.interpolation = RigidbodyInterpolation2D.Interpolate;
+            body.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+            BoxCollider2D collider = playerObject.AddComponent<BoxCollider2D>();
+            collider.size = new Vector2(0.78f, 1.18f);
+            collider.sharedMaterial = noFrictionMaterial;
+
+            PlayerController controller = playerObject.AddComponent<PlayerController>();
+            int groundLayer = GetLayerOrDefault("Ground");
+            controller.SetGroundLayers(1 << groundLayer);
+            return controller;
+        }
+
+        private void CreateSpawnPoint(Vector3 position)
+        {
+            GameObject spawnObject = new GameObject("Start Spawn");
+            spawnObject.transform.position = position;
+            spawnObject.transform.SetParent(levelRoot, true);
+            spawnObject.AddComponent<PlayerSpawnPoint>();
+        }
+
+        private void CreatePlatformLayout()
+        {
+            int groundLayer = GetLayerOrDefault("Ground");
+            int hazardLayer = GetLayerOrDefault("Hazard");
+            Transform introSection = CreateContainer("01 Intro Section", platformRoot);
+            Transform jumpSection = CreateContainer("02 Basic Jump Section", platformRoot);
+            Transform firstHazardSection = CreateContainer("03 First Hazard Introduction", platformRoot);
+            Transform wallJumpSection = CreateContainer("04 Wall Jump Tutorial Shaft", platformRoot);
+            Transform mixedSection = CreateContainer("05 Mixed Platform Hazard Section", platformRoot);
+            Transform optionalSection = CreateContainer("06 Optional Upper Route", platformRoot);
+            Transform finalClimbSection = CreateContainer("07 Final Vertical Climb", platformRoot);
+            Transform goalSection = CreateContainer("08 Elevated Finish Area", platformRoot);
+
+            BuildIntroSection(groundLayer, introSection);
+            BuildBasicJumpSection(groundLayer, jumpSection);
+            BuildFirstHazardSection(groundLayer, hazardLayer, firstHazardSection);
+            BuildWallJumpSection(groundLayer, wallJumpSection);
+            BuildMixedPlatformHazardSection(groundLayer, hazardLayer, mixedSection);
+            BuildOptionalUpperRoute(groundLayer, optionalSection);
+            BuildFinalClimbSection(groundLayer, hazardLayer, finalClimbSection);
+            BuildGoalSection(groundLayer, goalSection);
+            CreateFallResetZone(hazardLayer);
+        }
+
+        private void BuildIntroSection(int groundLayer, Transform parent)
+        {
+            CreateStyledPlatform("Intro Runway", new Vector3(-15.6f, -2.3f, 0f), new Vector2(6.6f, 0.55f), groundLayer, parent);
+            CreateStyledPlatform("Intro Step", new Vector3(-10.9f, -1.85f, 0f), new Vector2(2.4f, 0.45f), groundLayer, parent);
+        }
+
+        private void BuildBasicJumpSection(int groundLayer, Transform parent)
+        {
+            CreateStyledPlatform("Basic Jump Pad 01", new Vector3(-7.9f, -1.15f, 0f), new Vector2(2.1f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Basic Jump Pad 02", new Vector3(-5.0f, -0.55f, 0f), new Vector2(2.0f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Basic Jump Recovery Deck", new Vector3(-1.7f, -0.85f, 0f), new Vector2(3.0f, 0.5f), groundLayer, parent);
+        }
+
+        private void BuildFirstHazardSection(int groundLayer, int hazardLayer, Transform parent)
+        {
+            CreateStyledPlatform("First Hazard Approach Deck", new Vector3(1.6f, -1.3f, 0f), new Vector2(2.8f, 0.5f), groundLayer, parent);
+            CreateStyledPlatform("First Hazard Exit Deck", new Vector3(5.7f, -0.75f, 0f), new Vector2(2.7f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Post Hazard Reset Deck", new Vector3(8.7f, -1.1f, 0f), new Vector2(2.7f, 0.5f), groundLayer, parent);
+
+            CreateSpikeHazard("Spike Field - First Hazard Introduction", new Vector3(3.75f, -1.02f, 0f), new Vector2(1.0f, 0.55f), hazardLayer, true);
+        }
+
+        private void BuildWallJumpSection(int groundLayer, Transform parent)
+        {
+            CreateStyledPlatform("Wall Jump Shaft Safe Floor", new Vector3(11.6f, -1.65f, 0f), new Vector2(3.7f, 0.55f), groundLayer, parent);
+            CreateStyledPlatform("Wall Jump Shaft - Left Wall", new Vector3(10.05f, 0.05f, 0f), new Vector2(0.5f, 3.4f), groundLayer, parent);
+            CreateStyledPlatform("Wall Jump Shaft - Right Wall", new Vector3(12.45f, 0.95f, 0f), new Vector2(0.5f, 3.8f), groundLayer, parent);
+            CreateStyledPlatform("Wall Jump Mid Catch Ledge", new Vector3(13.9f, 2.25f, 0f), new Vector2(1.8f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Wall Jump Upper Left Wall", new Vector3(11.1f, 3.05f, 0f), new Vector2(0.5f, 2.9f), groundLayer, parent);
+            CreateStyledPlatform("Wall Jump Shaft Exit Ledge", new Vector3(14.7f, 4.15f, 0f), new Vector2(2.6f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Post Shaft Transition Deck", new Vector3(17.4f, 3.45f, 0f), new Vector2(2.4f, 0.45f), groundLayer, parent);
+        }
+
+        private void BuildMixedPlatformHazardSection(int groundLayer, int hazardLayer, Transform parent)
+        {
+            CreateStyledPlatform("Mixed Route Drop Deck", new Vector3(20.1f, 2.55f, 0f), new Vector2(2.6f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Hazard Bridge Left Deck", new Vector3(23.0f, 2.25f, 0f), new Vector2(2.0f, 0.45f), groundLayer, parent);
+            CreateStyledPlatform("Hazard Bridge Right Deck", new Vector3(26.5f, 2.95f, 0f), new Vector2(2.4f, 0.45f), groundLayer, parent);
+
+            CreateSpikeHazard("Spike Field - Mixed Route Gap", new Vector3(24.65f, 2.42f, 0f), new Vector2(1.1f, 0.55f), hazardLayer, true);
+        }
+
+        private void BuildOptionalUpperRoute(int groundLayer, Transform parent)
+        {
+            CreateStyledPlatform("Optional Route Entry Ledge", new Vector3(16.9f, 5.05f, 0f), new Vector2(1.5f, 0.4f), groundLayer, parent);
+            CreateStyledPlatform("Optional Route Crest", new Vector3(19.3f, 5.65f, 0f), new Vector2(1.7f, 0.4f), groundLayer, parent);
+            CreateStyledPlatform("Optional Route High Bridge", new Vector3(22.2f, 5.1f, 0f), new Vector2(2.4f, 0.4f), groundLayer, parent);
+            CreateStyledPlatform("Optional Route Rejoin", new Vector3(25.3f, 4.15f, 0f), new Vector2(2.4f, 0.4f), groundLayer, parent);
+        }
+
+        private void BuildFinalClimbSection(int groundLayer, int hazardLayer, Transform parent)
+        {
+            CreateStyledPlatform("Final Climb Entry Deck", new Vector3(29.2f, 3.1f, 0f), new Vector2(3.0f, 0.5f), groundLayer, parent);
+            CreateStyledPlatform("Final Shaft Safe Floor", new Vector3(31.4f, 2.6f, 0f), new Vector2(3.2f, 0.55f), groundLayer, parent);
+            CreateStyledPlatform("Final Climb Left Wall Lower", new Vector3(30.1f, 4.0f, 0f), new Vector2(0.5f, 2.9f), groundLayer, parent);
+            CreateStyledPlatform("Final Climb Right Wall", new Vector3(32.35f, 4.75f, 0f), new Vector2(0.5f, 3.75f), groundLayer, parent);
+            CreateStyledPlatform("Final Climb Left Wall Upper", new Vector3(30.1f, 6.65f, 0f), new Vector2(0.5f, 2.8f), groundLayer, parent);
+            CreateStyledPlatform("Final Rest Ledge", new Vector3(33.8f, 6.25f, 0f), new Vector2(2.5f, 0.45f), groundLayer, parent);
+
+            CreateSpikeHazard("Spike Field - Final Climb Floor Edge", new Vector3(33.35f, 2.88f, 0f), new Vector2(0.5f, 0.45f), hazardLayer, true);
+        }
+
+        private void BuildGoalSection(int groundLayer, Transform parent)
+        {
+            CreateStyledPlatform("Elevated Goal Platform", new Vector3(36.2f, 6.65f, 0f), new Vector2(3.8f, 0.55f), groundLayer, parent);
+        }
+
+        private void CreateFallResetZone(int hazardLayer)
+        {
+            GameObject killPlane = CreateTriggerVolume("Fall Reset Zone", new Vector3(8.7f, -6.25f, 0f), new Vector2(64f, 0.7f), hazardLayer);
+            killPlane.transform.SetParent(hazardRoot, true);
+            killPlane.AddComponent<Hazard>().Configure("Fall Reset Zone", false);
+        }
+
+        private void CreateGoal()
+        {
+            int goalLayer = GetLayerOrDefault("Goal");
+            GameObject goal = CreateTriggerVolume("Finish Portal - Elevated Exit", new Vector3(36.9f, 7.75f, 0f), new Vector2(0.9f, 2.2f), goalLayer);
+            goal.transform.SetParent(goalRoot, true);
+            goal.AddComponent<GoalZone>();
+
+            CreateChildSprite(goal.transform, "Portal Aura", softCircleSprite, Vector3.zero, new Vector3(2.4f, 2.4f, 1f), new Color(0.0f, 0.9f, 1f, 0.18f), 5);
+            CreateChildSprite(goal.transform, "Outer Ring", circleSprite, Vector3.zero, new Vector3(1.25f, 1.25f, 1f), new Color(0.1f, 1f, 0.82f, 0.9f), 6);
+            CreateChildSprite(goal.transform, "Inner Gate Void", circleSprite, Vector3.zero, new Vector3(0.86f, 0.86f, 1f), new Color(0.04f, 0.08f, 0.13f, 1f), 7);
+            CreateChildSprite(goal.transform, "Data Core", squareSprite, Vector3.zero, new Vector3(0.42f, 0.42f, 1f), new Color(1f, 0.92f, 0.32f, 1f), 8).transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            CreateChildSprite(goal.transform, "Left Gate Pylon", squareSprite, new Vector3(-0.62f, 0f, 0f), new Vector3(0.14f, 2.3f, 1f), new Color(0.08f, 0.44f, 0.55f, 1f), 7);
+            CreateChildSprite(goal.transform, "Right Gate Pylon", squareSprite, new Vector3(0.62f, 0f, 0f), new Vector3(0.14f, 2.3f, 1f), new Color(0.08f, 0.44f, 0.55f, 1f), 7);
+            CreateChildSprite(goal.transform, "Gate Top Pulse", squareSprite, new Vector3(0f, 1.12f, 0f), new Vector3(1.18f, 0.08f, 1f), new Color(0.8f, 1f, 0.38f, 1f), 9);
+        }
+
+        private GameObject CreateStyledPlatform(string name, Vector3 position, Vector2 size, int layer, Transform parent)
+        {
+            GameObject platform = new GameObject(name);
+            platform.layer = layer;
+            platform.transform.position = position;
+            platform.transform.SetParent(parent, true);
+
+            BoxCollider2D collider = platform.AddComponent<BoxCollider2D>();
+            collider.size = size;
+            collider.sharedMaterial = noFrictionMaterial;
+            platform.AddComponent<SurfaceModifier>();
+
+            CreateChildSprite(platform.transform, "Panel Base", squareSprite, Vector3.zero, new Vector3(size.x, size.y, 1f), new Color(0.11f, 0.16f, 0.2f, 1f), 0);
+            CreateChildSprite(platform.transform, "Upper Walkable Edge", squareSprite, new Vector3(0f, size.y * 0.5f - 0.055f, 0f), new Vector3(size.x, 0.09f, 1f), new Color(0.38f, 0.94f, 1f, 1f), 2);
+            CreateChildSprite(platform.transform, "Lower Shadow", squareSprite, new Vector3(0f, -size.y * 0.5f + 0.05f, 0f), new Vector3(size.x, 0.1f, 1f), new Color(0.02f, 0.04f, 0.07f, 1f), 1);
+            CreateChildSprite(platform.transform, "Left Edge Glow", squareSprite, new Vector3(-size.x * 0.5f + 0.035f, 0f, 0f), new Vector3(0.07f, size.y, 1f), new Color(0.0f, 0.75f, 0.9f, 0.85f), 3);
+            CreateChildSprite(platform.transform, "Right Edge Glow", squareSprite, new Vector3(size.x * 0.5f - 0.035f, 0f, 0f), new Vector3(0.07f, size.y, 1f), new Color(0.0f, 0.75f, 0.9f, 0.85f), 3);
+
+            int panelCount = Mathf.Max(1, Mathf.RoundToInt(size.x));
+
+            for (int i = 1; i < panelCount; i++)
+            {
+                float x = -size.x * 0.5f + (size.x / panelCount) * i;
+                CreateChildSprite(platform.transform, "Panel Seam " + i, squareSprite, new Vector3(x, -0.02f, 0f), new Vector3(0.025f, size.y * 0.72f, 1f), new Color(0.4f, 0.82f, 1f, 0.22f), 3);
+            }
+
+            return platform;
+        }
+
+        private void CreateSpikeHazard(string name, Vector3 position, Vector2 size, int layer, bool countsAsHazardHit)
+        {
+            GameObject hazard = CreateTriggerVolume(name, position, size, layer);
+            hazard.transform.SetParent(hazardRoot, true);
+            hazard.AddComponent<Hazard>().Configure(name, countsAsHazardHit);
+
+            CreateChildSprite(hazard.transform, "Danger Field Glow", softCircleSprite, Vector3.zero, new Vector3(size.x * 1.25f, size.y * 1.6f, 1f), new Color(1f, 0.05f, 0.18f, 0.2f), 4);
+            CreateChildSprite(hazard.transform, "Energy Base", squareSprite, new Vector3(0f, -size.y * 0.34f, 0f), new Vector3(size.x, size.y * 0.28f, 1f), new Color(0.55f, 0.02f, 0.08f, 1f), 5);
+            CreateChildSprite(hazard.transform, "Warning Strip", squareSprite, new Vector3(0f, -size.y * 0.06f, 0f), new Vector3(size.x, 0.055f, 1f), new Color(1f, 0.26f, 0.28f, 1f), 7);
+
+            int spikeCount = Mathf.Max(1, Mathf.RoundToInt(size.x / 0.32f));
+
+            for (int i = 0; i < spikeCount; i++)
+            {
+                float t = spikeCount == 1 ? 0.5f : (float)i / (spikeCount - 1);
+                float x = Mathf.Lerp(-size.x * 0.42f, size.x * 0.42f, t);
+                CreateChildSprite(hazard.transform, "Energy Spike " + (i + 1), triangleSprite, new Vector3(x, size.y * 0.12f, 0f), new Vector3(0.36f, size.y * 1.05f, 1f), new Color(1f, 0.1f, 0.16f, 1f), 8);
+            }
+        }
+
+        private GameObject CreateTriggerVolume(string name, Vector3 position, Vector2 size, int layer)
+        {
+            GameObject triggerObject = new GameObject(name);
+            triggerObject.layer = layer;
+            triggerObject.transform.position = position;
+
+            BoxCollider2D collider = triggerObject.AddComponent<BoxCollider2D>();
+            collider.size = size;
+            collider.isTrigger = true;
+
+            return triggerObject;
+        }
+
+        private void CreateBackground()
+        {
+            CreateChildSprite(environmentRoot, "Deep Simulation Backdrop", squareSprite, new Vector3(8.5f, 1.6f, 2f), new Vector3(64f, 20f, 1f), new Color(0.025f, 0.04f, 0.07f, 1f), -40);
+            CreateChildSprite(environmentRoot, "Lower Data Horizon Band", squareSprite, new Vector3(8.5f, -2.35f, 1f), new Vector3(64f, 1.1f, 1f), new Color(0.04f, 0.09f, 0.13f, 1f), -35);
+            CreateChildSprite(environmentRoot, "Upper Climb Signal Band", squareSprite, new Vector3(26f, 5.75f, 1f), new Vector3(26f, 0.9f, 1f), new Color(0.03f, 0.12f, 0.15f, 0.55f), -35);
+
+            for (int i = 0; i <= 43; i++)
+            {
+                float x = -22f + i * 1.5f;
+                CreateChildSprite(environmentRoot, "Vertical Grid Line " + i, squareSprite, new Vector3(x, 1.6f, 1f), new Vector3(0.018f, 17.5f, 1f), new Color(0.18f, 0.75f, 1f, 0.07f), -32);
+            }
+
+            for (int i = 0; i <= 20; i++)
+            {
+                float y = -6f + i * 0.85f;
+                CreateChildSprite(environmentRoot, "Horizontal Grid Line " + i, squareSprite, new Vector3(8.5f, y, 1f), new Vector3(64f, 0.014f, 1f), new Color(0.18f, 0.75f, 1f, 0.055f), -32);
+            }
+
+            CreateBackgroundPanel("Distant Panel A", new Vector3(-16.8f, 1.1f, 1f), new Vector2(2.0f, 2.3f));
+            CreateBackgroundPanel("Distant Panel B", new Vector3(-8.6f, 2.15f, 1f), new Vector2(2.5f, 1.6f));
+            CreateBackgroundPanel("Distant Panel C", new Vector3(2.5f, 1.7f, 1f), new Vector2(1.7f, 2.8f));
+            CreateBackgroundPanel("Distant Panel D", new Vector3(11.8f, 2.7f, 1f), new Vector2(2.2f, 2.1f));
+            CreateBackgroundPanel("Distant Panel E", new Vector3(20.7f, 4.2f, 1f), new Vector2(2.8f, 1.5f));
+            CreateBackgroundPanel("Distant Panel F", new Vector3(29.8f, 6.4f, 1f), new Vector2(2.0f, 2.7f));
+            CreateBackgroundPanel("Distant Panel G", new Vector3(36.2f, 7.6f, 1f), new Vector2(2.8f, 1.9f));
+
+            CreateChildSprite(environmentRoot, "Background Node A", circleSprite, new Vector3(-13.6f, 2.15f, 1f), new Vector3(0.18f, 0.18f, 1f), new Color(0.2f, 1f, 0.8f, 0.24f), -29);
+            CreateChildSprite(environmentRoot, "Background Node B", circleSprite, new Vector3(-2.2f, 2.75f, 1f), new Vector3(0.14f, 0.14f, 1f), new Color(0.95f, 0.88f, 0.28f, 0.2f), -29);
+            CreateChildSprite(environmentRoot, "Background Node C", circleSprite, new Vector3(8.8f, 1.45f, 1f), new Vector3(0.16f, 0.16f, 1f), new Color(0.2f, 1f, 0.8f, 0.22f), -29);
+            CreateChildSprite(environmentRoot, "Background Node D", circleSprite, new Vector3(14.1f, 4.4f, 1f), new Vector3(0.14f, 0.14f, 1f), new Color(0.95f, 0.88f, 0.28f, 0.18f), -29);
+            CreateChildSprite(environmentRoot, "Background Node E", circleSprite, new Vector3(24.8f, 5.85f, 1f), new Vector3(0.18f, 0.18f, 1f), new Color(0.2f, 1f, 0.8f, 0.22f), -29);
+            CreateChildSprite(environmentRoot, "Background Node F", circleSprite, new Vector3(34.8f, 7.9f, 1f), new Vector3(0.22f, 0.22f, 1f), new Color(0.95f, 0.88f, 0.28f, 0.26f), -29);
+        }
+
+        private void CreateBackgroundPanel(string name, Vector3 position, Vector2 size)
+        {
+            GameObject panel = new GameObject(name);
+            panel.transform.position = position;
+            panel.transform.SetParent(environmentRoot, true);
+
+            CreateChildSprite(panel.transform, "Panel Fill", squareSprite, Vector3.zero, new Vector3(size.x, size.y, 1f), new Color(0.08f, 0.14f, 0.18f, 0.38f), -31);
+            CreateChildSprite(panel.transform, "Panel Top Edge", squareSprite, new Vector3(0f, size.y * 0.5f, 0f), new Vector3(size.x, 0.025f, 1f), new Color(0.3f, 0.9f, 1f, 0.18f), -30);
+            CreateChildSprite(panel.transform, "Panel Side Edge", squareSprite, new Vector3(-size.x * 0.5f, 0f, 0f), new Vector3(0.025f, size.y, 1f), new Color(0.3f, 0.9f, 1f, 0.13f), -30);
+        }
+
+        private void CreateStartBeacon(Vector3 spawnPosition)
+        {
+            GameObject beacon = new GameObject("Start Beacon");
+            beacon.transform.position = spawnPosition + new Vector3(-0.55f, 0.05f, 0f);
+            beacon.transform.SetParent(levelRoot, true);
+
+            CreateChildSprite(beacon.transform, "Beacon Glow", softCircleSprite, new Vector3(0f, 0.45f, 0f), new Vector3(1.5f, 1.5f, 1f), new Color(0.1f, 1f, 0.52f, 0.16f), 3);
+            CreateChildSprite(beacon.transform, "Beacon Mast", squareSprite, new Vector3(0f, 0.15f, 0f), new Vector3(0.12f, 1.3f, 1f), new Color(0.12f, 0.95f, 0.58f, 1f), 4);
+            CreateChildSprite(beacon.transform, "Beacon Core", circleSprite, new Vector3(0f, 0.86f, 0f), new Vector3(0.32f, 0.32f, 1f), new Color(0.9f, 1f, 0.72f, 1f), 5);
+            CreateChildSprite(beacon.transform, "Beacon Base", squareSprite, new Vector3(0f, -0.55f, 0f), new Vector3(0.62f, 0.12f, 1f), new Color(0.06f, 0.32f, 0.28f, 1f), 4);
+        }
+
+        private GameObject CreateChildSprite(Transform parent, string name, Sprite sprite, Vector3 localPosition, Vector3 localScale, Color color, int sortingOrder)
+        {
+            GameObject child = new GameObject(name);
+            child.transform.SetParent(parent, false);
+            child.transform.localPosition = localPosition;
+            child.transform.localScale = localScale;
+
+            SpriteRenderer renderer = child.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+
+            return child;
+        }
+
+        private Transform CreateContainer(string name, Transform parent)
+        {
+            GameObject container = new GameObject(name);
+
+            if (parent != null)
+            {
+                container.transform.SetParent(parent, false);
+            }
+
+            return container.transform;
+        }
+
+        private void ConfigureCamera(Transform target)
+        {
+            Camera camera = Camera.main;
+
+            if (camera == null)
+            {
+                GameObject cameraObject = new GameObject("Main Camera");
+                cameraObject.tag = "MainCamera";
+                camera = cameraObject.AddComponent<Camera>();
+                cameraObject.AddComponent<AudioListener>();
+            }
+
+            camera.transform.position = new Vector3(-14.7f, -0.2f, -10f);
+            camera.orthographic = true;
+            camera.orthographicSize = 4.7f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.025f, 0.04f, 0.07f, 1f);
+
+            CameraFollow2D cameraFollow = GetOrAdd<CameraFollow2D>(camera.gameObject);
+            cameraFollow.Configure(target, new Vector3(1.4f, 1.2f, -10f), 6.5f, new Vector2(-14.7f, -1.2f), new Vector2(31.6f, 5.9f));
+        }
+
+        private PhysicsMaterial2D CreateNoFrictionMaterial()
+        {
+            PhysicsMaterial2D material = new PhysicsMaterial2D("Synaptrace No Friction Contact")
+            {
+                friction = 0f,
+                bounciness = 0f,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            return material;
+        }
+
+        private Sprite CreateFilledSprite(string spriteName, int size)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[size * size];
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = new Color32(255, 255, 255, 255);
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = spriteName;
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
+        }
+
+        private Sprite CreateCircleSprite(string spriteName, int size, bool soft)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float normalizedX = ((float)x + 0.5f) / size * 2f - 1f;
+                    float normalizedY = ((float)y + 0.5f) / size * 2f - 1f;
+                    float distance = Mathf.Sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+                    float alpha = soft ? Mathf.Clamp01(1f - Mathf.InverseLerp(0.2f, 1f, distance)) : (distance <= 0.92f ? 1f : 0f);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = spriteName;
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
+        }
+
+        private Sprite CreateTriangleSprite(string spriteName, int size)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float normalizedX = ((float)x + 0.5f) / size;
+                    float normalizedY = ((float)y + 0.5f) / size;
+                    float halfWidth = (1f - normalizedY) * 0.5f;
+                    bool inside = Mathf.Abs(normalizedX - 0.5f) <= halfWidth && normalizedY <= 0.96f;
+                    pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = spriteName;
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
+        }
+
+        private int GetLayerOrDefault(string layerName)
+        {
+            int layer = LayerMask.NameToLayer(layerName);
+            return layer >= 0 ? layer : 0;
+        }
+
+        private static T GetOrAdd<T>(GameObject target) where T : Component
+        {
+            T component = target.GetComponent<T>();
+
+            if (component == null)
+            {
+                component = target.AddComponent<T>();
+            }
+
+            return component;
+        }
+    }
+}

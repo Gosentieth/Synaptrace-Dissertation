@@ -26,3 +26,13 @@ The project investigates how adaptive AI systems can dynamically modify gameplay
 - Python
 - Git/GitHub
 - Aseprite
+
+## Current Unity Prototype
+
+An initial playable Unity prototype now exists under `game/Synaptrace`.
+
+- Main scene: `game/Synaptrace/Assets/Scenes/Main.unity`
+- Prototype documentation: `docs/unity-prototype-foundation.md`
+- Core gameplay scripts: `game/Synaptrace/Assets/Scripts`
+
+The current implementation is a clean base 2D platformer with movement, ground jumping, slow wall sliding, basic wall jumping, hazards, restart flow, completion detection, debug HUD feedback, telemetry tracking, and placeholder adaptation structure. The Layer 1 visual pass adds a dark sci-fi/simulation look, styled platforms, a glowing player avatar, spike-field hazards, a finish portal, and a larger first-level route with onboarding jumps, wall-jump shafts, optional upper routing, mixed hazards, and an elevated finish. Player movement is now prepared for future surface modifiers such as water, oil, wet walls, or sticky walls without implementing those systems yet. It does not implement reinforcement learning yet.
