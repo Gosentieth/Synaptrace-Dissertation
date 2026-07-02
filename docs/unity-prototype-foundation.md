@@ -6,11 +6,11 @@ This document describes the first playable Unity foundation for Synaptrace, the 
 
 - A playable `Main` scene at `game/Synaptrace/Assets/Scenes/Main.unity`.
 - A runtime prototype bootstrapper that builds the current Layer 1 level when Play mode starts.
-- A physics-based 2D player controller with horizontal movement, ground jumping, wall sliding, wall jumping, ground checks, and restart input.
+- A physics-based 2D player controller with horizontal movement, ground jumping, wall sliding, wall jumping, a short phase dodge, ground checks, and restart input.
 - A surface modifier foundation that can later tune movement, friction, wall-slide speed, and wall-jump behaviour per platform or wall.
 - A larger first level with a start point, styled platforms, spike hazards, a fall reset zone, wall-jump shafts, optional routing, and an elevated finish portal.
 - Game flow scripts for level start, death, retry, respawn, and completion.
-- Telemetry tracking for deaths, retries, jumps, hazard hits, elapsed time, completion time, and completion state.
+- Telemetry tracking for deaths, retries, jumps, phase dodges, hazard hits, elapsed time, completion time, and completion state.
 - A lightweight debug HUD that displays the current run status and telemetry counters.
 - Adaptation placeholder classes for static, rule-based, and future reinforcement-learning-driven difficulty.
 - A committed `GameSystems` prefab containing the runtime bootstrap entry point.
@@ -20,14 +20,22 @@ This document describes the first playable Unity foundation for Synaptrace, the 
 
 The prototype now has a cleaner, slightly futuristic visual identity:
 
-- The player is a composite glowing avatar with a suit body, core, visor, feet, and a `Visual Root - Animation Ready` child object for later idle/run/jump animation work.
+- The player is an original female gothic tech-knight with layered armour, shoulder plates, helmet, ponytail, crimson circuit-lined cape, neon visor, chest core, and armour runes.
 - Platforms use dark panel bases, cyan top highlights, side edge glows, lower shadows, and segmented panel seams.
 - Hazards use red energy-field styling with spike silhouettes and warning strips.
 - The finish object is a cyan portal/data gate with pylons, a glow aura, and a central data core.
-- The background is a dark simulation space with subtle grid lines, distant panels, and low-alpha data nodes.
+- The background is a dark simulation space with subtle grid lines, distant panels, low-alpha data nodes, and gothic data-tower silhouettes.
 - The HUD uses a compact dark panel with lighter cyan text while preserving all telemetry fields.
 
-All Layer 1 visuals are original procedural sprites generated at runtime by `RuntimePrototypeBootstrapper`. No external art assets were downloaded or imported.
+All current visuals are original procedural sprites generated at runtime by `RuntimePrototypeBootstrapper`. No external art assets were downloaded or imported.
+
+## Player animation and phase milestone
+
+`PlayerVisualAnimator` uses lightweight procedural transform and colour animation because the player is still generated at runtime. It reads public movement state without changing physics. Current visual states are idle, run, jump, fall, wall slide, wall jump, phase, and a generic disabled pose used when controls are locked.
+
+Pressing either `Shift` key starts a `0.22` second horizontal phase at speed `11` with a `0.8` second start-to-start cooldown. Direction follows current movement input or the last facing direction. The player collider remains solid against platforms and hazards; enemy contact logic alone treats the player as intangible during the phase. Hazards and the fall reset remain lethal.
+
+The first enemy is a corrupted gothic-tech sentinel placed on the Basic Jump Recovery Deck. It patrols a bounded area, displays a short alert telegraph when the player enters detection range, rushes horizontally, and then recovers. Normal contact reports a death through `LevelManager`; phase contact disables the enemy trigger and stuns it temporarily so the player can pass through.
 
 ## Expanded first-level layout
 
@@ -77,12 +85,14 @@ Controls:
 - Move: `A/D` or left/right arrows.
 - Jump: `Space`, `W`, or up arrow.
 - Wall jump: press jump while sliding/touching a wall in the air.
+- Phase dodge: either `Shift` key; phases through enemies only.
 - Restart: `R` or the `Restart Level` HUD button.
 
 ## Main scripts
 
 - `RuntimePrototypeBootstrapper.cs`: Builds the playable prototype objects at runtime so the scene can run even before authored art and prefab workflows are finalised.
 - `PlayerController.cs`: Handles movement, ground jumping, wall sliding, wall jumping, ground/wall detection, respawning, and jump telemetry.
+- `PlayerVisualAnimator.cs`: Applies procedural visual states to the runtime-created knight without affecting physics.
 - `LevelManager.cs`: Owns level start, death, retry, respawn, and completion flow.
 - `GameManager.cs`: Coordinates high-level run events, debug logs, HUD status, and telemetry calls.
 - `TelemetryTracker.cs`: Stores the current run telemetry snapshot and JSON debug output.
@@ -90,6 +100,7 @@ Controls:
 - `GoalZone.cs`: Reports level completion when the player reaches the finish trigger.
 - `CameraFollow2D.cs`: Keeps the camera following the player with simple clamps.
 - `SurfaceModifier.cs`: Defines per-surface movement and wall-interaction multipliers for future environmental modifiers.
+- `RushEnemyController.cs`: Controls bounded patrol, alert, rush, recovery, and phase-stun behavior for the first enemy.
 - `PrototypeHUD.cs`: Displays basic telemetry and restart controls.
 - `DifficultyManager.cs` and `DifficultyProfile.cs`: Provide the first adaptation extension point. The current mode is static; rule-based and reinforcement-learning modes are placeholders.
 - `PrototypeSceneGenerator.cs`: Optional editor tooling for rebuilding the bootstrap scene from Unity.
@@ -114,11 +125,13 @@ No reinforcement learning is implemented yet. The current design keeps adaptatio
 ## Known limitations
 
 - There are no authored sprite sheets yet.
-- The player has no animation states yet, although the visual hierarchy is prepared for them.
+- Player animation is procedural and intentionally first-pass; there are no authored clips or Animator Controller yet.
 - Wall slide and wall jump are functional but intentionally simple; there is no wall coyote time, stamina, or wall-climb system yet.
 - Surface modifiers are structurally ready, but water, oil, wet-wall, and sticky-wall presets have not been authored into levels yet.
 - Platform and hazard visuals are generated from simple procedural sprites, not final art.
 - Telemetry is still in-memory/debug-log based and does not export to a file or database.
+- Enemy encounters and successful phase-throughs do not yet have dedicated telemetry counters; only phase-dodge use is counted.
+- The prototype has one enemy type with bounded horizontal behavior and no health, attacks, drops, or navigation.
 - The optional Unity menu tool rebuilds the runtime bootstrap scene; it does not author a fully hand-placed saved scene.
 - The corrected shaft geometry has been reasoned from controller and collider values and compile-checked, but it still needs a final in-editor Play Mode feel pass.
 
@@ -126,9 +139,9 @@ No reinforcement learning is implemented yet. The current design keeps adaptatio
 
 1. Open the project in Unity and confirm `Main.unity` enters Play mode cleanly.
 2. Play through the complete main route, specifically checking both raised shaft entrances, recovery ledges, optional-route split/rejoin, mixed hazard gap, and portal approach.
-3. For Layer 2, add simple idle, run, jump, fall, wall-slide, wall-jump, death, and portal-complete animations under the player's `Visual Root - Animation Ready` object.
-4. Add authored player/platform/hazard sprites once the runtime visual direction is approved.
-5. Add a simple pause/results screen and a structured telemetry export target.
-6. Expand `DifficultyProfile` into static baseline configurations for the dissertation comparison.
-7. Add a small set of authored `SurfaceModifier` presets for oil, water, wet walls, and sticky walls.
-8. Add a rule-based adapter before implementing reinforcement-learning-driven adaptation.
+3. Tune phase speed, duration, cooldown, sentinel detection range, and alert timing from play-test feedback.
+4. Add authored player/platform/hazard sprites and Animator clips once the runtime visual direction is approved.
+5. Add distinct death and portal-completion animation signals rather than the shared disabled pose.
+6. Add a simple pause/results screen and a structured telemetry export target.
+7. Expand `DifficultyProfile` into static baseline configurations for the dissertation comparison.
+8. Add a small set of authored `SurfaceModifier` presets before rule-based or reinforcement-learning adaptation.

@@ -1,4 +1,5 @@
 using Synaptrace.Adaptation;
+using Synaptrace.Enemies;
 using Synaptrace.Player;
 using Synaptrace.Systems;
 using Synaptrace.Telemetry;
@@ -24,6 +25,7 @@ namespace Synaptrace.Core
         private Transform environmentRoot;
         private Transform platformRoot;
         private Transform hazardRoot;
+        private Transform enemyRoot;
         private Transform goalRoot;
 
         private readonly struct PlatformSpec
@@ -78,6 +80,7 @@ namespace Synaptrace.Core
             CreateBackground();
             CreateStartBeacon(player.transform.position);
             CreatePlatformLayout();
+            CreateEnemies(player);
             CreateGoal();
             ConfigureCamera(player.transform);
         }
@@ -97,6 +100,7 @@ namespace Synaptrace.Core
             environmentRoot = CreateContainer("Background - Simulation Grid", levelRoot);
             platformRoot = CreateContainer("Gameplay Sections - Adaptive Ready", levelRoot);
             hazardRoot = CreateContainer("Hazards", levelRoot);
+            enemyRoot = CreateContainer("Enemies - Adaptive Ready", levelRoot);
             goalRoot = CreateContainer("Goal", levelRoot);
         }
 
@@ -106,17 +110,7 @@ namespace Synaptrace.Core
             playerObject.transform.position = position;
             playerObject.transform.SetParent(levelRoot, true);
 
-            GameObject visualRoot = new GameObject("Visual Root - Animation Ready");
-            visualRoot.transform.SetParent(playerObject.transform, false);
-
-            CreateChildSprite(visualRoot.transform, "Avatar Glow", softCircleSprite, new Vector3(0f, 0.05f, 0f), new Vector3(1.55f, 1.55f, 1f), new Color(0.0f, 0.88f, 1f, 0.2f), 8);
-            CreateChildSprite(visualRoot.transform, "Suit Body", squareSprite, new Vector3(0f, -0.08f, 0f), new Vector3(0.58f, 0.82f, 1f), new Color(0.08f, 0.18f, 0.27f, 1f), 10);
-            CreateChildSprite(visualRoot.transform, "Suit Top Highlight", squareSprite, new Vector3(0f, 0.36f, 0f), new Vector3(0.52f, 0.09f, 1f), new Color(0.0f, 0.9f, 1f, 1f), 11);
-            CreateChildSprite(visualRoot.transform, "Core", circleSprite, new Vector3(0f, 0.02f, 0f), new Vector3(0.34f, 0.34f, 1f), new Color(0.12f, 1f, 0.78f, 1f), 12);
-            CreateChildSprite(visualRoot.transform, "Core Inner", circleSprite, new Vector3(0f, 0.02f, 0f), new Vector3(0.18f, 0.18f, 1f), new Color(0.95f, 1f, 1f, 1f), 13);
-            CreateChildSprite(visualRoot.transform, "Visor", squareSprite, new Vector3(0.16f, 0.26f, 0f), new Vector3(0.2f, 0.08f, 1f), new Color(0.88f, 1f, 1f, 1f), 13);
-            CreateChildSprite(visualRoot.transform, "Left Foot", squareSprite, new Vector3(-0.18f, -0.58f, 0f), new Vector3(0.18f, 0.14f, 1f), new Color(0.0f, 0.64f, 0.84f, 1f), 11);
-            CreateChildSprite(visualRoot.transform, "Right Foot", squareSprite, new Vector3(0.18f, -0.58f, 0f), new Vector3(0.18f, 0.14f, 1f), new Color(0.0f, 0.64f, 0.84f, 1f), 11);
+            GameObject visualRoot = CreatePlayerVisual(playerObject.transform);
 
             Rigidbody2D body = playerObject.AddComponent<Rigidbody2D>();
             body.gravityScale = 3.2f;
@@ -130,7 +124,92 @@ namespace Synaptrace.Core
             PlayerController controller = playerObject.AddComponent<PlayerController>();
             int groundLayer = GetLayerOrDefault("Ground");
             controller.SetGroundLayers(1 << groundLayer);
+
+            PlayerVisualAnimator visualAnimator = visualRoot.AddComponent<PlayerVisualAnimator>();
+            visualAnimator.Configure(controller);
             return controller;
+        }
+
+        private GameObject CreatePlayerVisual(Transform parent)
+        {
+            GameObject visualRoot = new GameObject("Visual Root - Tech Knight");
+            visualRoot.transform.SetParent(parent, false);
+
+            Color darkSteel = new Color(0.08f, 0.11f, 0.16f, 1f);
+            Color armourSteel = new Color(0.42f, 0.5f, 0.58f, 1f);
+            Color brightSteel = new Color(0.72f, 0.8f, 0.84f, 1f);
+            Color capeColor = new Color(0.28f, 0.025f, 0.12f, 1f);
+            Color energyColor = new Color(0.1f, 1f, 0.82f, 1f);
+
+            CreateChildSprite(visualRoot.transform, "Phase Aura", softCircleSprite, new Vector3(0f, 0.02f, 0f), new Vector3(1.45f, 1.65f, 1f), new Color(0.1f, 0.95f, 1f, 0.08f), 8);
+
+            GameObject cape = CreateChildSprite(visualRoot.transform, "Crimson Tech Cape", triangleSprite, new Vector3(-0.2f, -0.04f, 0f), new Vector3(0.46f, 0.94f, 1f), capeColor, 9);
+            cape.transform.localRotation = Quaternion.Euler(0f, 0f, 8f);
+            CreateChildSprite(visualRoot.transform, "Cape Circuit Trim", squareSprite, new Vector3(-0.36f, -0.08f, 0f), new Vector3(0.045f, 0.66f, 1f), new Color(0.08f, 0.72f, 0.68f, 0.8f), 10);
+
+            GameObject ponytail = CreateChildSprite(visualRoot.transform, "Knight Ponytail", triangleSprite, new Vector3(-0.25f, 0.47f, 0f), new Vector3(0.2f, 0.42f, 1f), new Color(0.34f, 0.035f, 0.15f, 1f), 10);
+            ponytail.transform.localRotation = Quaternion.Euler(0f, 0f, 70f);
+
+            CreateChildSprite(visualRoot.transform, "Knight Armour Body", squareSprite, new Vector3(0f, -0.05f, 0f), new Vector3(0.5f, 0.58f, 1f), darkSteel, 11);
+            CreateChildSprite(visualRoot.transform, "Knight Chest Plate", squareSprite, new Vector3(0.02f, 0.08f, 0f), new Vector3(0.44f, 0.27f, 1f), armourSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Waist Guard", squareSprite, new Vector3(0f, -0.29f, 0f), new Vector3(0.4f, 0.14f, 1f), armourSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Left Shoulder Plate", circleSprite, new Vector3(-0.3f, 0.17f, 0f), new Vector3(0.24f, 0.19f, 1f), brightSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Right Shoulder Plate", circleSprite, new Vector3(0.3f, 0.17f, 0f), new Vector3(0.24f, 0.19f, 1f), brightSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Left Gauntlet", squareSprite, new Vector3(-0.29f, -0.08f, 0f), new Vector3(0.14f, 0.28f, 1f), darkSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Right Gauntlet", squareSprite, new Vector3(0.29f, -0.08f, 0f), new Vector3(0.14f, 0.28f, 1f), darkSteel, 12);
+
+            CreateChildSprite(visualRoot.transform, "Knight Helmet", circleSprite, new Vector3(0f, 0.39f, 0f), new Vector3(0.5f, 0.42f, 1f), armourSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Helmet Crown", squareSprite, new Vector3(-0.03f, 0.52f, 0f), new Vector3(0.38f, 0.13f, 1f), brightSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Neon Visor", squareSprite, new Vector3(0.07f, 0.39f, 0f), new Vector3(0.34f, 0.085f, 1f), energyColor, 14);
+
+            GameObject core = CreateChildSprite(visualRoot.transform, "Chest Energy Core", squareSprite, new Vector3(0.03f, 0.08f, 0f), new Vector3(0.16f, 0.16f, 1f), new Color(0.82f, 1f, 0.94f, 1f), 14);
+            core.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            CreateChildSprite(visualRoot.transform, "Armour Circuit Line", squareSprite, new Vector3(0.03f, -0.12f, 0f), new Vector3(0.035f, 0.22f, 1f), energyColor, 14);
+
+            CreateChildSprite(visualRoot.transform, "Left Armoured Boot", squareSprite, new Vector3(-0.15f, -0.53f, 0f), new Vector3(0.2f, 0.18f, 1f), brightSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Right Armoured Boot", squareSprite, new Vector3(0.15f, -0.53f, 0f), new Vector3(0.2f, 0.18f, 1f), brightSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Left Knee Rune", squareSprite, new Vector3(-0.15f, -0.37f, 0f), new Vector3(0.12f, 0.045f, 1f), energyColor, 14);
+            CreateChildSprite(visualRoot.transform, "Right Knee Rune", squareSprite, new Vector3(0.15f, -0.37f, 0f), new Vector3(0.12f, 0.045f, 1f), energyColor, 14);
+
+            return visualRoot;
+        }
+
+        private void CreateEnemies(PlayerController player)
+        {
+            GameObject enemyObject = new GameObject("Enemy 01 - Corrupted Sentinel");
+            enemyObject.transform.position = new Vector3(-1.7f, -0.1f, 0f);
+            enemyObject.transform.SetParent(enemyRoot, true);
+
+            GameObject visualRoot = new GameObject("Corrupted Sentinel Visual");
+            visualRoot.transform.SetParent(enemyObject.transform, false);
+
+            CreateChildSprite(visualRoot.transform, "Sentinel Aura", softCircleSprite, Vector3.zero, new Vector3(1.4f, 1.4f, 1f), new Color(0.8f, 0.08f, 0.48f, 0.2f), 8);
+            CreateChildSprite(visualRoot.transform, "Tattered Data Mantle", triangleSprite, new Vector3(-0.12f, -0.05f, 0f), new Vector3(0.62f, 0.82f, 1f), new Color(0.16f, 0.02f, 0.2f, 1f), 9);
+            CreateChildSprite(visualRoot.transform, "Sentinel Armour", squareSprite, new Vector3(0f, -0.04f, 0f), new Vector3(0.56f, 0.58f, 1f), new Color(0.14f, 0.1f, 0.2f, 1f), 10);
+            CreateChildSprite(visualRoot.transform, "Sentinel Helmet", squareSprite, new Vector3(0f, 0.31f, 0f), new Vector3(0.6f, 0.32f, 1f), new Color(0.38f, 0.3f, 0.46f, 1f), 11);
+
+            GameObject leftHorn = CreateChildSprite(visualRoot.transform, "Left Rune Horn", triangleSprite, new Vector3(-0.22f, 0.54f, 0f), new Vector3(0.16f, 0.3f, 1f), new Color(0.48f, 0.32f, 0.56f, 1f), 10);
+            leftHorn.transform.localRotation = Quaternion.Euler(0f, 0f, -12f);
+            GameObject rightHorn = CreateChildSprite(visualRoot.transform, "Right Rune Horn", triangleSprite, new Vector3(0.22f, 0.54f, 0f), new Vector3(0.16f, 0.3f, 1f), new Color(0.48f, 0.32f, 0.56f, 1f), 10);
+            rightHorn.transform.localRotation = Quaternion.Euler(0f, 0f, 12f);
+
+            CreateChildSprite(visualRoot.transform, "Rush Visor", squareSprite, new Vector3(0.08f, 0.32f, 0f), new Vector3(0.36f, 0.08f, 1f), new Color(1f, 0.08f, 0.24f, 1f), 13);
+            GameObject enemyCore = CreateChildSprite(visualRoot.transform, "Corruption Core", squareSprite, new Vector3(0f, 0f, 0f), new Vector3(0.18f, 0.18f, 1f), new Color(1f, 0.12f, 0.62f, 1f), 13);
+            enemyCore.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            CreateChildSprite(visualRoot.transform, "Left Sentinel Foot", squareSprite, new Vector3(-0.17f, -0.46f, 0f), new Vector3(0.2f, 0.16f, 1f), new Color(0.3f, 0.22f, 0.38f, 1f), 11);
+            CreateChildSprite(visualRoot.transform, "Right Sentinel Foot", squareSprite, new Vector3(0.17f, -0.46f, 0f), new Vector3(0.2f, 0.16f, 1f), new Color(0.3f, 0.22f, 0.38f, 1f), 11);
+
+            Rigidbody2D body = enemyObject.AddComponent<Rigidbody2D>();
+            body.bodyType = RigidbodyType2D.Kinematic;
+            body.interpolation = RigidbodyInterpolation2D.Interpolate;
+            body.constraints = RigidbodyConstraints2D.FreezeRotation;
+
+            BoxCollider2D collider = enemyObject.AddComponent<BoxCollider2D>();
+            collider.size = new Vector2(0.8f, 0.9f);
+            collider.isTrigger = true;
+
+            RushEnemyController enemyController = enemyObject.AddComponent<RushEnemyController>();
+            enemyController.Configure(player, visualRoot.transform);
         }
 
         private void CreateSpawnPoint(Vector3 position)
@@ -232,8 +311,8 @@ namespace Synaptrace.Core
             const float innerWidth = 2.0f;
             float rightWallX = leftWallX + ShaftWallThickness + innerWidth;
 
-            // This repeats the tutorial pattern with a narrower shaft and alternating
-            // catches, but preserves a clear 1.825-unit walk-under entrance.
+            // This repeats the tutorial pattern with a narrower shaft and a smaller
+            // recovery ledge, but preserves a clear 1.825-unit walk-under entrance.
             CreatePlatforms(groundLayer, parent,
                 new PlatformSpec("Final Climb Entry Deck", 29.0f, 3.1f, 2.6f, 0.5f),
                 new PlatformSpec("Final Shaft Safe Floor", 32.05f, 2.6f, 4.5f, 0.55f),
@@ -289,6 +368,13 @@ namespace Synaptrace.Core
             CreateChildSprite(platform.transform, "Lower Shadow", squareSprite, new Vector3(0f, -size.y * 0.5f + 0.05f, 0f), new Vector3(size.x, 0.1f, 1f), new Color(0.02f, 0.04f, 0.07f, 1f), 1);
             CreateChildSprite(platform.transform, "Left Edge Glow", squareSprite, new Vector3(-size.x * 0.5f + 0.035f, 0f, 0f), new Vector3(0.07f, size.y, 1f), new Color(0.0f, 0.75f, 0.9f, 0.85f), 3);
             CreateChildSprite(platform.transform, "Right Edge Glow", squareSprite, new Vector3(size.x * 0.5f - 0.035f, 0f, 0f), new Vector3(0.07f, size.y, 1f), new Color(0.0f, 0.75f, 0.9f, 0.85f), 3);
+
+            if (size.x >= 1.5f)
+            {
+                GameObject rune = CreateChildSprite(platform.transform, "Gothic Tech Rune", squareSprite, new Vector3(0f, -0.02f, 0f), new Vector3(0.1f, 0.1f, 1f), new Color(0.72f, 0.2f, 0.88f, 0.55f), 3);
+                rune.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+                CreateChildSprite(platform.transform, "Rune Circuit Bar", squareSprite, new Vector3(0f, -0.02f, 0f), new Vector3(0.38f, 0.025f, 1f), new Color(0.18f, 0.72f, 0.82f, 0.35f), 3);
+            }
 
             int panelCount = Mathf.Max(1, Mathf.RoundToInt(size.x));
 
@@ -370,6 +456,11 @@ namespace Synaptrace.Core
             CreateBackgroundPanel("Distant Panel F", new Vector3(29.8f, 6.4f, 1f), new Vector2(2.0f, 2.7f));
             CreateBackgroundPanel("Distant Panel G", new Vector3(36.2f, 7.6f, 1f), new Vector2(2.8f, 1.9f));
 
+            CreateGothicTower("Gothic Data Tower A", new Vector3(-11.5f, 0.1f, 1f), new Vector2(2.2f, 4.2f));
+            CreateGothicTower("Gothic Data Tower B", new Vector3(5.0f, 0.75f, 1f), new Vector2(1.8f, 4.8f));
+            CreateGothicTower("Gothic Data Tower C", new Vector3(17.0f, 2.0f, 1f), new Vector2(2.0f, 5.4f));
+            CreateGothicTower("Gothic Data Tower D", new Vector3(30.5f, 3.8f, 1f), new Vector2(2.3f, 5.8f));
+
             CreateChildSprite(environmentRoot, "Background Node A", circleSprite, new Vector3(-13.6f, 2.15f, 1f), new Vector3(0.18f, 0.18f, 1f), new Color(0.2f, 1f, 0.8f, 0.24f), -29);
             CreateChildSprite(environmentRoot, "Background Node B", circleSprite, new Vector3(-2.2f, 2.75f, 1f), new Vector3(0.14f, 0.14f, 1f), new Color(0.95f, 0.88f, 0.28f, 0.2f), -29);
             CreateChildSprite(environmentRoot, "Background Node C", circleSprite, new Vector3(8.8f, 1.45f, 1f), new Vector3(0.16f, 0.16f, 1f), new Color(0.2f, 1f, 0.8f, 0.22f), -29);
@@ -387,6 +478,22 @@ namespace Synaptrace.Core
             CreateChildSprite(panel.transform, "Panel Fill", squareSprite, Vector3.zero, new Vector3(size.x, size.y, 1f), new Color(0.08f, 0.14f, 0.18f, 0.38f), -31);
             CreateChildSprite(panel.transform, "Panel Top Edge", squareSprite, new Vector3(0f, size.y * 0.5f, 0f), new Vector3(size.x, 0.025f, 1f), new Color(0.3f, 0.9f, 1f, 0.18f), -30);
             CreateChildSprite(panel.transform, "Panel Side Edge", squareSprite, new Vector3(-size.x * 0.5f, 0f, 0f), new Vector3(0.025f, size.y, 1f), new Color(0.3f, 0.9f, 1f, 0.13f), -30);
+        }
+
+        private void CreateGothicTower(string name, Vector3 position, Vector2 size)
+        {
+            GameObject tower = new GameObject(name);
+            tower.transform.position = position;
+            tower.transform.SetParent(environmentRoot, true);
+
+            Color silhouette = new Color(0.035f, 0.045f, 0.075f, 0.92f);
+            Color roofColor = new Color(0.09f, 0.025f, 0.1f, 0.82f);
+            CreateChildSprite(tower.transform, "Tower Silhouette", squareSprite, Vector3.zero, new Vector3(size.x, size.y, 1f), silhouette, -31);
+            CreateChildSprite(tower.transform, "Left Battlement", squareSprite, new Vector3(-size.x * 0.34f, size.y * 0.54f, 0f), new Vector3(size.x * 0.2f, size.y * 0.16f, 1f), silhouette, -31);
+            CreateChildSprite(tower.transform, "Right Battlement", squareSprite, new Vector3(size.x * 0.34f, size.y * 0.54f, 0f), new Vector3(size.x * 0.2f, size.y * 0.16f, 1f), silhouette, -31);
+            CreateChildSprite(tower.transform, "Tower Spire", triangleSprite, new Vector3(0f, size.y * 0.7f, 0f), new Vector3(size.x * 0.72f, size.y * 0.45f, 1f), roofColor, -30);
+            CreateChildSprite(tower.transform, "Rune Window", squareSprite, new Vector3(0f, size.y * 0.15f, 0f), new Vector3(size.x * 0.18f, size.y * 0.2f, 1f), new Color(0.35f, 0.1f, 0.48f, 0.3f), -29);
+            CreateChildSprite(tower.transform, "Tower Circuit", squareSprite, new Vector3(0f, -size.y * 0.12f, 0f), new Vector3(0.035f, size.y * 0.45f, 1f), new Color(0.12f, 0.72f, 0.78f, 0.16f), -29);
         }
 
         private void CreateStartBeacon(Vector3 spawnPosition)

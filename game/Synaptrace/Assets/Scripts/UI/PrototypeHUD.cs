@@ -10,7 +10,7 @@ namespace Synaptrace.UI
 
         private const float PanelMargin = 14f;
         private const float PanelWidth = 372f;
-        private const float PanelHeight = 224f;
+        private const float PanelHeight = 244f;
         private const float ButtonWidth = 142f;
         private const float ButtonHeight = 28f;
 
@@ -46,9 +46,10 @@ namespace Synaptrace.UI
             GUILayout.Space(4f);
             GUILayout.Label("Status: " + statusMessage, labelStyle);
             GUILayout.Label("Time: " + snapshot.elapsedTime.ToString("0.00") + "s", labelStyle);
-            GUILayout.Label("Deaths: " + snapshot.deathCount + "    Retries: " + snapshot.retryCount + "    Jumps: " + snapshot.jumpCount, labelStyle);
-            GUILayout.Label("Hazard hits: " + snapshot.hazardHitCount + "    Completed: " + snapshot.completed, labelStyle);
-            GUILayout.Label("Controls: A/D or arrows, Space/W/Up, wall jump, R", smallLabelStyle);
+            GUILayout.Label("Deaths: " + snapshot.deathCount + "    Retries: " + snapshot.retryCount, labelStyle);
+            GUILayout.Label("Jumps: " + snapshot.jumpCount + "    Dodges: " + snapshot.dodgeCount + "    Hazard hits: " + snapshot.hazardHitCount, labelStyle);
+            GUILayout.Label("Completed: " + snapshot.completed, labelStyle);
+            GUILayout.Label("Controls: A/D or arrows, Space/W/Up, Shift phase, R", smallLabelStyle);
             GUILayout.FlexibleSpace();
 
             if (GUILayout.Button("Restart Level", buttonStyle, GUILayout.Width(ButtonWidth), GUILayout.Height(ButtonHeight)) && LevelManager.Instance != null)

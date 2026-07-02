@@ -27,6 +27,11 @@ namespace Synaptrace.Player
         [SerializeField] private Vector2 wallJumpImpulse = new Vector2(8.5f, 11.5f);
         [SerializeField] private float wallJumpControlLockTime = 0.16f;
 
+        [Header("Phase Dodge")]
+        [SerializeField] private float phaseSpeed = 11f;
+        [SerializeField] private float phaseDuration = 0.22f;
+        [SerializeField] private float phaseCooldown = 0.8f;
+
         private Rigidbody2D body;
         private Collider2D bodyCollider;
         private TelemetryTracker telemetryTracker;
@@ -36,13 +41,22 @@ namespace Synaptrace.Player
         private float baseJumpImpulse;
         private float moveInput;
         private float wallJumpControlTimer;
+        private float phaseTimeRemaining;
+        private float phaseCooldownRemaining;
         private int wallDirection;
+        private int phaseDirection = 1;
         private bool controlsEnabled = true;
         private bool jumpRequested;
+        private bool phaseRequested;
         private bool isTouchingWall;
 
         public bool IsGrounded { get; private set; }
         public bool IsWallSliding { get; private set; }
+        public bool IsPhasing => phaseTimeRemaining > 0f;
+        public bool IsWallJumping => wallJumpControlTimer > 0f && !IsGrounded;
+        public bool ControlsEnabled => controlsEnabled;
+        public float FacingDirection { get; private set; } = 1f;
+        public Vector2 CurrentVelocity => body != null ? body.linearVelocity : Vector2.zero;
 
         private void Awake()
         {
@@ -78,6 +92,7 @@ namespace Synaptrace.Player
 
             ReadMovementInput();
             ReadJumpInput();
+            ReadPhaseInput();
             ReadRestartInput();
         }
 
@@ -85,10 +100,22 @@ namespace Synaptrace.Player
         {
             IsGrounded = CheckGrounded();
             UpdateWallState();
-            ApplyMovement();
-            ApplyJump();
-            ApplyWallSlide();
-            ClampFallSpeed();
+            ProcessPhaseRequest();
+
+            if (IsPhasing)
+            {
+                IsWallSliding = false;
+                jumpRequested = false;
+                ApplyPhaseMovement();
+            }
+            else
+            {
+                ApplyMovement();
+                ApplyJump();
+                ApplyWallSlide();
+                ClampFallSpeed();
+            }
+
             UpdateTimers();
         }
 
@@ -103,6 +130,8 @@ namespace Synaptrace.Player
 
             if (!enabled && body != null)
             {
+                phaseTimeRemaining = 0f;
+                phaseRequested = false;
                 body.linearVelocity = new Vector2(0f, body.linearVelocity.y);
             }
         }
@@ -115,8 +144,13 @@ namespace Synaptrace.Player
             body.angularVelocity = 0f;
             moveInput = 0f;
             jumpRequested = false;
+            phaseRequested = false;
             wallJumpControlTimer = 0f;
+            phaseTimeRemaining = 0f;
+            phaseCooldownRemaining = 0f;
             wallDirection = 0;
+            phaseDirection = 1;
+            FacingDirection = 1f;
             groundSurface = null;
             wallSurface = null;
             isTouchingWall = false;
@@ -164,6 +198,11 @@ namespace Synaptrace.Player
             }
 
             moveInput = Mathf.Clamp(keyboardInput, -1f, 1f);
+
+            if (Mathf.Abs(moveInput) > 0.1f)
+            {
+                FacingDirection = Mathf.Sign(moveInput);
+            }
         }
 
         private void ReadJumpInput()
@@ -171,6 +210,14 @@ namespace Synaptrace.Player
             if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
             {
                 jumpRequested = true;
+            }
+        }
+
+        private void ReadPhaseInput()
+        {
+            if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
+            {
+                phaseRequested = true;
             }
         }
 
@@ -232,10 +279,47 @@ namespace Synaptrace.Player
             int jumpDirection = wallDirection != 0 ? -wallDirection : -1;
             Vector2 activeWallJumpImpulse = GetWallJumpImpulse();
             body.linearVelocity = new Vector2(activeWallJumpImpulse.x * jumpDirection, activeWallJumpImpulse.y);
+            FacingDirection = jumpDirection;
             wallJumpControlTimer = wallJumpControlLockTime;
             IsWallSliding = false;
 
             RecordJumpTelemetry();
+        }
+
+        private void ProcessPhaseRequest()
+        {
+            if (!phaseRequested)
+            {
+                return;
+            }
+
+            phaseRequested = false;
+
+            if (phaseCooldownRemaining > 0f || IsPhasing)
+            {
+                return;
+            }
+
+            float requestedDirection = Mathf.Abs(moveInput) > 0.1f ? Mathf.Sign(moveInput) : FacingDirection;
+            phaseDirection = requestedDirection < 0f ? -1 : 1;
+            FacingDirection = phaseDirection;
+            phaseTimeRemaining = phaseDuration;
+            phaseCooldownRemaining = phaseCooldown;
+            wallJumpControlTimer = 0f;
+            jumpRequested = false;
+            IsWallSliding = false;
+
+            if (telemetryTracker != null)
+            {
+                telemetryTracker.RecordDodge();
+            }
+        }
+
+        private void ApplyPhaseMovement()
+        {
+            Vector2 velocity = body.linearVelocity;
+            velocity.x = phaseDirection * phaseSpeed;
+            body.linearVelocity = velocity;
         }
 
         private void ApplyWallSlide()
@@ -270,6 +354,16 @@ namespace Synaptrace.Player
             if (wallJumpControlTimer > 0f)
             {
                 wallJumpControlTimer = Mathf.Max(0f, wallJumpControlTimer - Time.fixedDeltaTime);
+            }
+
+            if (phaseTimeRemaining > 0f)
+            {
+                phaseTimeRemaining = Mathf.Max(0f, phaseTimeRemaining - Time.fixedDeltaTime);
+            }
+
+            if (phaseCooldownRemaining > 0f)
+            {
+                phaseCooldownRemaining = Mathf.Max(0f, phaseCooldownRemaining - Time.fixedDeltaTime);
             }
         }
 

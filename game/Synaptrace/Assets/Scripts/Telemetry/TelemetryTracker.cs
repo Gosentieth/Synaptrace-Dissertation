@@ -10,6 +10,7 @@ namespace Synaptrace.Telemetry
         public int deathCount;
         public int retryCount;
         public int jumpCount;
+        public int dodgeCount;
         public int hazardHitCount;
         public float completionTime;
         public float elapsedTime;
@@ -25,6 +26,7 @@ namespace Synaptrace.Telemetry
         private int deathCount;
         private int retryCount;
         private int jumpCount;
+        private int dodgeCount;
         private int hazardHitCount;
         private bool running;
         private bool completed;
@@ -38,6 +40,7 @@ namespace Synaptrace.Telemetry
             deathCount = 0;
             retryCount = 0;
             jumpCount = 0;
+            dodgeCount = 0;
             hazardHitCount = 0;
             running = true;
             completed = false;
@@ -64,6 +67,17 @@ namespace Synaptrace.Telemetry
 
             hazardHitCount++;
             lastEvent = "Hazard hit: " + sourceName;
+        }
+
+        public void RecordDodge()
+        {
+            if (!running || completed)
+            {
+                return;
+            }
+
+            dodgeCount++;
+            lastEvent = "Phase dodge";
         }
 
         public void RecordDeath(string sourceName)
@@ -109,6 +123,7 @@ namespace Synaptrace.Telemetry
                 deathCount = deathCount,
                 retryCount = retryCount,
                 jumpCount = jumpCount,
+                dodgeCount = dodgeCount,
                 hazardHitCount = hazardHitCount,
                 completionTime = completionTime,
                 elapsedTime = GetElapsedTime(),
