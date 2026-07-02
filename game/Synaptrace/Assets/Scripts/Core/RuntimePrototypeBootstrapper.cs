@@ -10,6 +10,9 @@ namespace Synaptrace.Core
     [DefaultExecutionOrder(-1000)]
     public sealed class RuntimePrototypeBootstrapper : MonoBehaviour
     {
+        private const float ShaftWallThickness = 0.5f;
+        private static readonly Vector2 PlayerColliderSize = new Vector2(0.78f, 1.18f);
+
         [SerializeField] private bool buildOnAwake = true;
 
         private Sprite squareSprite;
@@ -22,6 +25,20 @@ namespace Synaptrace.Core
         private Transform platformRoot;
         private Transform hazardRoot;
         private Transform goalRoot;
+
+        private readonly struct PlatformSpec
+        {
+            public PlatformSpec(string name, float x, float y, float width, float height)
+            {
+                Name = name;
+                Position = new Vector2(x, y);
+                Size = new Vector2(width, height);
+            }
+
+            public string Name { get; }
+            public Vector2 Position { get; }
+            public Vector2 Size { get; }
+        }
 
         private void Awake()
         {
@@ -107,7 +124,7 @@ namespace Synaptrace.Core
             body.constraints = RigidbodyConstraints2D.FreezeRotation;
 
             BoxCollider2D collider = playerObject.AddComponent<BoxCollider2D>();
-            collider.size = new Vector2(0.78f, 1.18f);
+            collider.size = PlayerColliderSize;
             collider.sharedMaterial = noFrictionMaterial;
 
             PlayerController controller = playerObject.AddComponent<PlayerController>();
@@ -143,76 +160,93 @@ namespace Synaptrace.Core
             BuildWallJumpSection(groundLayer, wallJumpSection);
             BuildMixedPlatformHazardSection(groundLayer, hazardLayer, mixedSection);
             BuildOptionalUpperRoute(groundLayer, optionalSection);
-            BuildFinalClimbSection(groundLayer, hazardLayer, finalClimbSection);
+            BuildFinalClimbSection(groundLayer, finalClimbSection);
             BuildGoalSection(groundLayer, goalSection);
             CreateFallResetZone(hazardLayer);
         }
 
         private void BuildIntroSection(int groundLayer, Transform parent)
         {
-            CreateStyledPlatform("Intro Runway", new Vector3(-15.6f, -2.3f, 0f), new Vector2(6.6f, 0.55f), groundLayer, parent);
-            CreateStyledPlatform("Intro Step", new Vector3(-10.9f, -1.85f, 0f), new Vector2(2.4f, 0.45f), groundLayer, parent);
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Intro Runway", -15.6f, -2.3f, 6.6f, 0.55f),
+                new PlatformSpec("Intro Step", -10.9f, -1.85f, 2.4f, 0.45f));
         }
 
         private void BuildBasicJumpSection(int groundLayer, Transform parent)
         {
-            CreateStyledPlatform("Basic Jump Pad 01", new Vector3(-7.9f, -1.15f, 0f), new Vector2(2.1f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Basic Jump Pad 02", new Vector3(-5.0f, -0.55f, 0f), new Vector2(2.0f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Basic Jump Recovery Deck", new Vector3(-1.7f, -0.85f, 0f), new Vector2(3.0f, 0.5f), groundLayer, parent);
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Basic Jump Pad 01", -7.9f, -1.15f, 2.1f, 0.45f),
+                new PlatformSpec("Basic Jump Pad 02", -5.0f, -0.55f, 2.0f, 0.45f),
+                new PlatformSpec("Basic Jump Recovery Deck", -1.7f, -0.85f, 3.0f, 0.5f));
         }
 
         private void BuildFirstHazardSection(int groundLayer, int hazardLayer, Transform parent)
         {
-            CreateStyledPlatform("First Hazard Approach Deck", new Vector3(1.6f, -1.3f, 0f), new Vector2(2.8f, 0.5f), groundLayer, parent);
-            CreateStyledPlatform("First Hazard Exit Deck", new Vector3(5.7f, -0.75f, 0f), new Vector2(2.7f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Post Hazard Reset Deck", new Vector3(8.7f, -1.1f, 0f), new Vector2(2.7f, 0.5f), groundLayer, parent);
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("First Hazard Approach Deck", 1.6f, -1.3f, 2.8f, 0.5f),
+                new PlatformSpec("First Hazard Exit Deck", 5.7f, -0.75f, 2.7f, 0.45f),
+                new PlatformSpec("Post Hazard Reset Deck", 8.7f, -1.1f, 2.7f, 0.5f));
 
             CreateSpikeHazard("Spike Field - First Hazard Introduction", new Vector3(3.75f, -1.02f, 0f), new Vector2(1.0f, 0.55f), hazardLayer, true);
         }
 
         private void BuildWallJumpSection(int groundLayer, Transform parent)
         {
-            CreateStyledPlatform("Wall Jump Shaft Safe Floor", new Vector3(11.6f, -1.65f, 0f), new Vector2(3.7f, 0.55f), groundLayer, parent);
-            CreateStyledPlatform("Wall Jump Shaft - Left Wall", new Vector3(10.05f, 0.05f, 0f), new Vector2(0.5f, 3.4f), groundLayer, parent);
-            CreateStyledPlatform("Wall Jump Shaft - Right Wall", new Vector3(12.45f, 0.95f, 0f), new Vector2(0.5f, 3.8f), groundLayer, parent);
-            CreateStyledPlatform("Wall Jump Mid Catch Ledge", new Vector3(13.9f, 2.25f, 0f), new Vector2(1.8f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Wall Jump Upper Left Wall", new Vector3(11.1f, 3.05f, 0f), new Vector2(0.5f, 2.9f), groundLayer, parent);
-            CreateStyledPlatform("Wall Jump Shaft Exit Ledge", new Vector3(14.7f, 4.15f, 0f), new Vector2(2.6f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Post Shaft Transition Deck", new Vector3(17.4f, 3.45f, 0f), new Vector2(2.4f, 0.45f), groundLayer, parent);
+            const float leftWallX = 10.55f;
+            const float innerWidth = 2.3f;
+            float rightWallX = leftWallX + ShaftWallThickness + innerWidth;
+
+            // The raised left wall leaves 1.55 units above the safe floor, so the
+            // 1.18-unit player can walk into the shaft before beginning wall jumps.
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Tutorial Shaft Entry and Safe Floor", 12.1f, -1.125f, 4.1f, 0.55f),
+                new PlatformSpec("Tutorial Shaft Raised Entrance Wall", leftWallX, 2.35f, ShaftWallThickness, 3.3f),
+                new PlatformSpec("Tutorial Shaft Opposing Wall", rightWallX, 1.6f, ShaftWallThickness, 4.9f),
+                new PlatformSpec("Tutorial Shaft Lower Catch Ledge", 11.35f, 0.95f, 1.1f, 0.35f),
+                new PlatformSpec("Tutorial Shaft Exit Ledge", 14.65f, 3.75f, 2.1f, 0.45f),
+                new PlatformSpec("Post Tutorial Main Route Deck", 17.4f, 2.8f, 2.4f, 0.45f));
         }
 
         private void BuildMixedPlatformHazardSection(int groundLayer, int hazardLayer, Transform parent)
         {
-            CreateStyledPlatform("Mixed Route Drop Deck", new Vector3(20.1f, 2.55f, 0f), new Vector2(2.6f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Hazard Bridge Left Deck", new Vector3(23.0f, 2.25f, 0f), new Vector2(2.0f, 0.45f), groundLayer, parent);
-            CreateStyledPlatform("Hazard Bridge Right Deck", new Vector3(26.5f, 2.95f, 0f), new Vector2(2.4f, 0.45f), groundLayer, parent);
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Mixed Route Drop Deck", 20.1f, 2.55f, 2.6f, 0.45f),
+                new PlatformSpec("Hazard Bridge Left Deck", 23.0f, 2.25f, 2.0f, 0.45f),
+                new PlatformSpec("Hazard Bridge Right Deck", 26.5f, 2.95f, 2.4f, 0.45f));
 
             CreateSpikeHazard("Spike Field - Mixed Route Gap", new Vector3(24.65f, 2.42f, 0f), new Vector2(1.1f, 0.55f), hazardLayer, true);
         }
 
         private void BuildOptionalUpperRoute(int groundLayer, Transform parent)
         {
-            CreateStyledPlatform("Optional Route Entry Ledge", new Vector3(16.9f, 5.05f, 0f), new Vector2(1.5f, 0.4f), groundLayer, parent);
-            CreateStyledPlatform("Optional Route Crest", new Vector3(19.3f, 5.65f, 0f), new Vector2(1.7f, 0.4f), groundLayer, parent);
-            CreateStyledPlatform("Optional Route High Bridge", new Vector3(22.2f, 5.1f, 0f), new Vector2(2.4f, 0.4f), groundLayer, parent);
-            CreateStyledPlatform("Optional Route Rejoin", new Vector3(25.3f, 4.15f, 0f), new Vector2(2.4f, 0.4f), groundLayer, parent);
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Optional Route Entry Ledge", 16.9f, 5.05f, 1.5f, 0.4f),
+                new PlatformSpec("Optional Route Crest", 19.3f, 5.65f, 1.7f, 0.4f),
+                new PlatformSpec("Optional Route High Bridge", 22.2f, 5.1f, 2.4f, 0.4f),
+                new PlatformSpec("Optional Route Rejoin", 25.3f, 4.15f, 2.4f, 0.4f));
         }
 
-        private void BuildFinalClimbSection(int groundLayer, int hazardLayer, Transform parent)
+        private void BuildFinalClimbSection(int groundLayer, Transform parent)
         {
-            CreateStyledPlatform("Final Climb Entry Deck", new Vector3(29.2f, 3.1f, 0f), new Vector2(3.0f, 0.5f), groundLayer, parent);
-            CreateStyledPlatform("Final Shaft Safe Floor", new Vector3(31.4f, 2.6f, 0f), new Vector2(3.2f, 0.55f), groundLayer, parent);
-            CreateStyledPlatform("Final Climb Left Wall Lower", new Vector3(30.1f, 4.0f, 0f), new Vector2(0.5f, 2.9f), groundLayer, parent);
-            CreateStyledPlatform("Final Climb Right Wall", new Vector3(32.35f, 4.75f, 0f), new Vector2(0.5f, 3.75f), groundLayer, parent);
-            CreateStyledPlatform("Final Climb Left Wall Upper", new Vector3(30.1f, 6.65f, 0f), new Vector2(0.5f, 2.8f), groundLayer, parent);
-            CreateStyledPlatform("Final Rest Ledge", new Vector3(33.8f, 6.25f, 0f), new Vector2(2.5f, 0.45f), groundLayer, parent);
+            const float leftWallX = 31.1f;
+            const float innerWidth = 2.0f;
+            float rightWallX = leftWallX + ShaftWallThickness + innerWidth;
 
-            CreateSpikeHazard("Spike Field - Final Climb Floor Edge", new Vector3(33.35f, 2.88f, 0f), new Vector2(0.5f, 0.45f), hazardLayer, true);
+            // This repeats the tutorial pattern with a narrower shaft and alternating
+            // catches, but preserves a clear 1.825-unit walk-under entrance.
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Final Climb Entry Deck", 29.0f, 3.1f, 2.6f, 0.5f),
+                new PlatformSpec("Final Shaft Safe Floor", 32.05f, 2.6f, 4.5f, 0.55f),
+                new PlatformSpec("Final Shaft Raised Entrance Wall", leftWallX, 5.975f, ShaftWallThickness, 2.55f),
+                new PlatformSpec("Final Shaft Opposing Wall", rightWallX, 5.1f, ShaftWallThickness, 4.45f),
+                new PlatformSpec("Final Shaft Recovery Ledge", 31.8f, 5.1f, 0.9f, 0.35f),
+                new PlatformSpec("Final Shaft Exit to Goal Ledge", 34.55f, 6.65f, 1.4f, 0.45f));
         }
 
         private void BuildGoalSection(int groundLayer, Transform parent)
         {
-            CreateStyledPlatform("Elevated Goal Platform", new Vector3(36.2f, 6.65f, 0f), new Vector2(3.8f, 0.55f), groundLayer, parent);
+            CreatePlatforms(groundLayer, parent,
+                new PlatformSpec("Elevated Goal Platform", 36.2f, 6.65f, 3.8f, 0.55f));
         }
 
         private void CreateFallResetZone(int hazardLayer)
@@ -265,6 +299,16 @@ namespace Synaptrace.Core
             }
 
             return platform;
+        }
+
+        private void CreatePlatforms(int layer, Transform parent, params PlatformSpec[] platformSpecs)
+        {
+            for (int i = 0; i < platformSpecs.Length; i++)
+            {
+                PlatformSpec platformSpec = platformSpecs[i];
+                Vector3 position = new Vector3(platformSpec.Position.x, platformSpec.Position.y, 0f);
+                CreateStyledPlatform(platformSpec.Name, position, platformSpec.Size, layer, parent);
+            }
         }
 
         private void CreateSpikeHazard(string name, Vector3 position, Vector2 size, int layer, bool countsAsHazardHit)

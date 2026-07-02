@@ -36,17 +36,21 @@ The first level is now significantly wider and more vertical. It is organised in
 - `01 Intro Section`: safe starting runway and start beacon.
 - `02 Basic Jump Section`: three readable onboarding jumps with safe recovery space.
 - `03 First Hazard Introduction`: a small spike gap with clear approach and exit platforms.
-- `04 Wall Jump Tutorial Shaft`: a forgiving vertical shaft with close walls and a safe floor below.
+- `04 Wall Jump Tutorial Shaft`: a forgiving raised-entry shaft with a continuous safe floor, two clear walls, and a recovery ledge.
 - `05 Mixed Platform Hazard Section`: a lower main route with a larger spike gap and safe landing decks.
 - `06 Optional Upper Route`: a visible higher route that requires slightly better movement and rejoins before the final climb.
-- `07 Final Vertical Climb`: a second wall-jump climb leading upward toward the finish.
+- `07 Final Vertical Climb`: a narrower raised-entry wall-jump climb with a recovery ledge leading directly to the finish platform.
 - `08 Elevated Finish Area`: the final platform and finish portal above the starting height.
 
-The layout is intended to be completed by a normal player in roughly 45-90 seconds once familiar with the controls. The main path runs left to right and then climbs upward, while the optional upper route can skip some of the lower hazard pressure. The section naming is deliberate: future adaptive difficulty work can vary gaps, route availability, hazard intensity, wall-interaction requirements, surface modifiers, or goal-section pacing by section.
+The layout is intended to be completed by a normal player in roughly 45-90 seconds once familiar with the controls. The main path runs left to right and then climbs upward, while the optional upper route can skip some of the lower hazard pressure. Both shaft entrances are now open at player height rather than blocked by their left walls. The section naming is deliberate: future adaptive difficulty work can vary gaps, route availability, hazard intensity, wall-interaction requirements, surface modifiers, or goal-section pacing by section.
 
 ## Spacing assumptions
 
-The current controller uses a `7` unit horizontal move speed, `12` unit ground jump impulse, `3.2` gravity scale, and an `8.5 x / 11.5 y` wall-jump impulse. Based on those values, the expanded level keeps required ground gaps mostly around `1.5-2.8` units with broad landing platforms, and keeps wall-jump shafts roughly `1.8-2.3` units wide between wall faces. Vertical rises are staged so the player can recover on catch ledges rather than needing perfect input.
+The current controller uses a `7` unit horizontal move speed, `12` unit ground jump impulse, `3.2` gravity scale, and an `8.5 x / 11.5 y` wall-jump impulse. Based on those values, the expanded level keeps required ground gaps mostly around `1.5-2.8` units with broad landing platforms. The tutorial shaft is `2.3` units wide between wall faces with `1.55` units of entrance clearance; the final shaft is `2.0` units wide with `1.825` units of entrance clearance. Both clear the `1.18`-unit player collider and include a recovery ledge without creating a full staircase that bypasses wall interaction.
+
+## Level-builder maintainability
+
+The runtime-generated approach remains in place. Section methods now declare platforms through a small internal `PlatformSpec` structure, keeping names, positions, and sizes together while preserving the existing platform creation, colliders, procedural styling, and neutral `SurfaceModifier` setup.
 
 ## Current movement mechanics
 
@@ -116,12 +120,12 @@ No reinforcement learning is implemented yet. The current design keeps adaptatio
 - Platform and hazard visuals are generated from simple procedural sprites, not final art.
 - Telemetry is still in-memory/debug-log based and does not export to a file or database.
 - The optional Unity menu tool rebuilds the runtime bootstrap scene; it does not author a fully hand-placed saved scene.
-- The expanded layout has been spaced from controller values and compile-checked, but it still needs a final in-editor Play Mode feel pass.
+- The corrected shaft geometry has been reasoned from controller and collider values and compile-checked, but it still needs a final in-editor Play Mode feel pass.
 
 ## Suggested next steps
 
 1. Open the project in Unity and confirm `Main.unity` enters Play mode cleanly.
-2. Play through the expanded main route, optional upper route, first wall-jump shaft, mixed hazard gap, and final climb.
+2. Play through the complete main route, specifically checking both raised shaft entrances, recovery ledges, optional-route split/rejoin, mixed hazard gap, and portal approach.
 3. For Layer 2, add simple idle, run, jump, fall, wall-slide, wall-jump, death, and portal-complete animations under the player's `Visual Root - Animation Ready` object.
 4. Add authored player/platform/hazard sprites once the runtime visual direction is approved.
 5. Add a simple pause/results screen and a structured telemetry export target.
