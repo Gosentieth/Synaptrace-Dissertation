@@ -12,4 +12,4 @@ The current level route is intentionally wider and more vertical than the origin
 
 Both wall-jump entrances now use raised entrance walls above continuous safe floors. The player can walk naturally into each shaft, use the opposing walls and recovery ledge, and exit toward the next route without climbing an exterior wall or crossing a blocked transition.
 
-`PlayerVisualAnimator` provides procedural idle, run, jump, fall, wall-slide, wall-jump, phase, and disabled-state poses without modifying the player collider or physics. Dodge count is included in the existing in-memory telemetry snapshot and HUD.
+`PlayerVisualAnimator` drives a lightweight articulated rig with separate upper and lower arms and legs. It provides procedural idle, run, jump, fall, landing, wall-slide, wall-jump, phase, and disabled-state poses without modifying the player collider or physics. The revised knight uses a narrower shoulder line, shaped torso and waist armour, hip guards, visible elbow and knee motion, distinct jump/fall silhouettes, and a brief landing reaction. Dodge count is included in the existing in-memory telemetry snapshot and HUD.

@@ -20,6 +20,7 @@ namespace Synaptrace.Core
         private Sprite circleSprite;
         private Sprite softCircleSprite;
         private Sprite triangleSprite;
+        private Sprite trapezoidSprite;
         private PhysicsMaterial2D noFrictionMaterial;
         private Transform levelRoot;
         private Transform environmentRoot;
@@ -91,6 +92,7 @@ namespace Synaptrace.Core
             circleSprite = CreateCircleSprite("Synaptrace Circle Sprite", 32, false);
             softCircleSprite = CreateCircleSprite("Synaptrace Soft Glow Sprite", 64, true);
             triangleSprite = CreateTriangleSprite("Synaptrace Spike Sprite", 32);
+            trapezoidSprite = CreateTrapezoidSprite("Synaptrace Tapered Armour Sprite", 32);
             noFrictionMaterial = CreateNoFrictionMaterial();
         }
 
@@ -143,35 +145,74 @@ namespace Synaptrace.Core
 
             CreateChildSprite(visualRoot.transform, "Phase Aura", softCircleSprite, new Vector3(0f, 0.02f, 0f), new Vector3(1.45f, 1.65f, 1f), new Color(0.1f, 0.95f, 1f, 0.08f), 8);
 
-            GameObject cape = CreateChildSprite(visualRoot.transform, "Crimson Tech Cape", triangleSprite, new Vector3(-0.2f, -0.04f, 0f), new Vector3(0.46f, 0.94f, 1f), capeColor, 9);
-            cape.transform.localRotation = Quaternion.Euler(0f, 0f, 8f);
-            CreateChildSprite(visualRoot.transform, "Cape Circuit Trim", squareSprite, new Vector3(-0.36f, -0.08f, 0f), new Vector3(0.045f, 0.66f, 1f), new Color(0.08f, 0.72f, 0.68f, 0.8f), 10);
+            Transform cape = CreateContainer("Crimson Tech Cape", visualRoot.transform);
+            cape.localPosition = new Vector3(-0.13f, 0.13f, 0f);
+            cape.localRotation = Quaternion.Euler(0f, 0f, 8f);
+            CreateChildSprite(cape, "Cape Cloth", triangleSprite, new Vector3(-0.06f, -0.2f, 0f), new Vector3(0.38f, 0.72f, 1f), capeColor, 9);
+            CreateChildSprite(cape, "Cape Circuit Trim", squareSprite, new Vector3(-0.19f, -0.2f, 0f), new Vector3(0.035f, 0.52f, 1f), new Color(0.08f, 0.72f, 0.68f, 0.8f), 10);
 
-            GameObject ponytail = CreateChildSprite(visualRoot.transform, "Knight Ponytail", triangleSprite, new Vector3(-0.25f, 0.47f, 0f), new Vector3(0.2f, 0.42f, 1f), new Color(0.34f, 0.035f, 0.15f, 1f), 10);
-            ponytail.transform.localRotation = Quaternion.Euler(0f, 0f, 70f);
+            Transform ponytail = CreateContainer("Knight Ponytail", visualRoot.transform);
+            ponytail.localPosition = new Vector3(-0.17f, 0.46f, 0f);
+            ponytail.localRotation = Quaternion.Euler(0f, 0f, 68f);
+            CreateChildSprite(ponytail, "Ponytail Plume", triangleSprite, new Vector3(-0.04f, -0.06f, 0f), new Vector3(0.16f, 0.34f, 1f), new Color(0.34f, 0.035f, 0.15f, 1f), 10);
 
-            CreateChildSprite(visualRoot.transform, "Knight Armour Body", squareSprite, new Vector3(0f, -0.05f, 0f), new Vector3(0.5f, 0.58f, 1f), darkSteel, 11);
-            CreateChildSprite(visualRoot.transform, "Knight Chest Plate", squareSprite, new Vector3(0.02f, 0.08f, 0f), new Vector3(0.44f, 0.27f, 1f), armourSteel, 12);
-            CreateChildSprite(visualRoot.transform, "Waist Guard", squareSprite, new Vector3(0f, -0.29f, 0f), new Vector3(0.4f, 0.14f, 1f), armourSteel, 12);
-            CreateChildSprite(visualRoot.transform, "Left Shoulder Plate", circleSprite, new Vector3(-0.3f, 0.17f, 0f), new Vector3(0.24f, 0.19f, 1f), brightSteel, 13);
-            CreateChildSprite(visualRoot.transform, "Right Shoulder Plate", circleSprite, new Vector3(0.3f, 0.17f, 0f), new Vector3(0.24f, 0.19f, 1f), brightSteel, 13);
-            CreateChildSprite(visualRoot.transform, "Left Gauntlet", squareSprite, new Vector3(-0.29f, -0.08f, 0f), new Vector3(0.14f, 0.28f, 1f), darkSteel, 12);
-            CreateChildSprite(visualRoot.transform, "Right Gauntlet", squareSprite, new Vector3(0.29f, -0.08f, 0f), new Vector3(0.14f, 0.28f, 1f), darkSteel, 12);
+            CreateKnightLeg(visualRoot.transform, "Left", -0.095f, darkSteel, armourSteel, brightSteel, energyColor, 10);
+            CreateKnightArm(visualRoot.transform, "Left", -0.215f, darkSteel, armourSteel, brightSteel, 10);
 
-            CreateChildSprite(visualRoot.transform, "Knight Helmet", circleSprite, new Vector3(0f, 0.39f, 0f), new Vector3(0.5f, 0.42f, 1f), armourSteel, 12);
-            CreateChildSprite(visualRoot.transform, "Helmet Crown", squareSprite, new Vector3(-0.03f, 0.52f, 0f), new Vector3(0.38f, 0.13f, 1f), brightSteel, 13);
-            CreateChildSprite(visualRoot.transform, "Neon Visor", squareSprite, new Vector3(0.07f, 0.39f, 0f), new Vector3(0.34f, 0.085f, 1f), energyColor, 14);
+            CreateChildSprite(visualRoot.transform, "Knight Armour Body", trapezoidSprite, new Vector3(0f, -0.025f, 0f), new Vector3(0.32f, 0.42f, 1f), darkSteel, 11);
+            CreateChildSprite(visualRoot.transform, "Knight Chest Plate", circleSprite, new Vector3(0.015f, 0.08f, 0f), new Vector3(0.36f, 0.23f, 1f), armourSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Chest Collar", squareSprite, new Vector3(0.015f, 0.18f, 0f), new Vector3(0.24f, 0.05f, 1f), brightSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Waist Guard", squareSprite, new Vector3(0f, -0.205f, 0f), new Vector3(0.22f, 0.095f, 1f), armourSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Hip Belt", squareSprite, new Vector3(0f, -0.25f, 0f), new Vector3(0.31f, 0.05f, 1f), brightSteel, 13);
 
-            GameObject core = CreateChildSprite(visualRoot.transform, "Chest Energy Core", squareSprite, new Vector3(0.03f, 0.08f, 0f), new Vector3(0.16f, 0.16f, 1f), new Color(0.82f, 1f, 0.94f, 1f), 14);
+            GameObject leftHipGuard = CreateChildSprite(visualRoot.transform, "Left Hip Guard", triangleSprite, new Vector3(-0.105f, -0.292f, 0f), new Vector3(0.15f, 0.165f, 1f), armourSteel, 12);
+            leftHipGuard.transform.localRotation = Quaternion.Euler(0f, 0f, 172f);
+            GameObject rightHipGuard = CreateChildSprite(visualRoot.transform, "Right Hip Guard", triangleSprite, new Vector3(0.105f, -0.292f, 0f), new Vector3(0.15f, 0.165f, 1f), armourSteel, 12);
+            rightHipGuard.transform.localRotation = Quaternion.Euler(0f, 0f, 188f);
+
+            CreateKnightLeg(visualRoot.transform, "Right", 0.095f, darkSteel, armourSteel, brightSteel, energyColor, 12);
+            CreateKnightArm(visualRoot.transform, "Right", 0.215f, darkSteel, armourSteel, brightSteel, 13);
+
+            CreateChildSprite(visualRoot.transform, "Left Shoulder Plate", circleSprite, new Vector3(-0.215f, 0.15f, 0f), new Vector3(0.16f, 0.13f, 1f), brightSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Right Shoulder Plate", circleSprite, new Vector3(0.215f, 0.15f, 0f), new Vector3(0.16f, 0.13f, 1f), brightSteel, 14);
+
+            CreateChildSprite(visualRoot.transform, "Knight Helmet", circleSprite, new Vector3(0f, 0.405f, 0f), new Vector3(0.35f, 0.32f, 1f), armourSteel, 12);
+            CreateChildSprite(visualRoot.transform, "Helmet Crown", squareSprite, new Vector3(-0.02f, 0.52f, 0f), new Vector3(0.27f, 0.08f, 1f), brightSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Helmet Jaw Guard", squareSprite, new Vector3(0.03f, 0.335f, 0f), new Vector3(0.255f, 0.065f, 1f), darkSteel, 13);
+            CreateChildSprite(visualRoot.transform, "Neon Visor", squareSprite, new Vector3(0.045f, 0.41f, 0f), new Vector3(0.25f, 0.06f, 1f), energyColor, 14);
+
+            GameObject core = CreateChildSprite(visualRoot.transform, "Chest Energy Core", squareSprite, new Vector3(0.025f, 0.08f, 0f), new Vector3(0.12f, 0.12f, 1f), new Color(0.82f, 1f, 0.94f, 1f), 14);
             core.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            CreateChildSprite(visualRoot.transform, "Armour Circuit Line", squareSprite, new Vector3(0.03f, -0.12f, 0f), new Vector3(0.035f, 0.22f, 1f), energyColor, 14);
-
-            CreateChildSprite(visualRoot.transform, "Left Armoured Boot", squareSprite, new Vector3(-0.15f, -0.53f, 0f), new Vector3(0.2f, 0.18f, 1f), brightSteel, 12);
-            CreateChildSprite(visualRoot.transform, "Right Armoured Boot", squareSprite, new Vector3(0.15f, -0.53f, 0f), new Vector3(0.2f, 0.18f, 1f), brightSteel, 12);
-            CreateChildSprite(visualRoot.transform, "Left Knee Rune", squareSprite, new Vector3(-0.15f, -0.37f, 0f), new Vector3(0.12f, 0.045f, 1f), energyColor, 14);
-            CreateChildSprite(visualRoot.transform, "Right Knee Rune", squareSprite, new Vector3(0.15f, -0.37f, 0f), new Vector3(0.12f, 0.045f, 1f), energyColor, 14);
+            CreateChildSprite(visualRoot.transform, "Armour Circuit Line", squareSprite, new Vector3(0.025f, -0.105f, 0f), new Vector3(0.03f, 0.19f, 1f), energyColor, 14);
 
             return visualRoot;
+        }
+
+        private void CreateKnightArm(Transform parent, string side, float xPosition, Color darkSteel, Color armourSteel, Color brightSteel, int sortingOrder)
+        {
+            Transform upperArm = CreateContainer($"{side} Arm Rig", parent);
+            upperArm.localPosition = new Vector3(xPosition, 0.125f, 0f);
+
+            CreateChildSprite(upperArm, $"{side} Upper Arm", trapezoidSprite, new Vector3(0f, -0.085f, 0f), new Vector3(0.095f, 0.18f, 1f), darkSteel, sortingOrder);
+
+            Transform forearm = CreateContainer($"{side} Forearm Rig", upperArm);
+            forearm.localPosition = new Vector3(0f, -0.17f, 0f);
+            CreateChildSprite(forearm, $"{side} Forearm Armour", trapezoidSprite, new Vector3(0f, -0.07f, 0f), new Vector3(0.105f, 0.15f, 1f), armourSteel, sortingOrder + 1);
+            CreateChildSprite(forearm, $"{side} Gauntlet", squareSprite, new Vector3(0.015f, -0.158f, 0f), new Vector3(0.125f, 0.095f, 1f), brightSteel, sortingOrder + 2);
+        }
+
+        private void CreateKnightLeg(Transform parent, string side, float xPosition, Color darkSteel, Color armourSteel, Color brightSteel, Color energyColor, int sortingOrder)
+        {
+            Transform upperLeg = CreateContainer($"{side} Leg Rig", parent);
+            upperLeg.localPosition = new Vector3(xPosition, -0.16f, 0f);
+
+            CreateChildSprite(upperLeg, $"{side} Thigh Armour", trapezoidSprite, new Vector3(0f, -0.09f, 0f), new Vector3(0.12f, 0.2f, 1f), darkSteel, sortingOrder);
+
+            Transform lowerLeg = CreateContainer($"{side} Lower Leg Rig", upperLeg);
+            lowerLeg.localPosition = new Vector3(0f, -0.18f, 0f);
+            CreateChildSprite(lowerLeg, $"{side} Shin Armour", trapezoidSprite, new Vector3(0f, -0.08f, 0f), new Vector3(0.11f, 0.17f, 1f), armourSteel, sortingOrder + 1);
+            CreateChildSprite(lowerLeg, $"{side} Knee Rune", squareSprite, new Vector3(0f, 0.005f, 0f), new Vector3(0.1f, 0.032f, 1f), energyColor, sortingOrder + 3);
+            CreateChildSprite(lowerLeg, $"{side} Armoured Boot", squareSprite, new Vector3(0.025f, -0.18f, 0f), new Vector3(0.17f, 0.1f, 1f), brightSteel, sortingOrder + 2);
         }
 
         private void CreateEnemies(PlayerController player)
@@ -642,6 +683,37 @@ namespace Synaptrace.Core
                     float normalizedY = ((float)y + 0.5f) / size;
                     float halfWidth = (1f - normalizedY) * 0.5f;
                     bool inside = Mathf.Abs(normalizedX - 0.5f) <= halfWidth && normalizedY <= 0.96f;
+                    pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = spriteName;
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
+        }
+
+        private Sprite CreateTrapezoidSprite(string spriteName, int size)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float normalizedX = ((float)x + 0.5f) / size;
+                    float normalizedY = ((float)y + 0.5f) / size;
+                    float halfWidth = Mathf.Lerp(0.31f, 0.48f, normalizedY);
+                    bool inside = Mathf.Abs(normalizedX - 0.5f) <= halfWidth;
                     pixels[y * size + x] = inside ? new Color32(255, 255, 255, 255) : new Color32(255, 255, 255, 0);
                 }
             }

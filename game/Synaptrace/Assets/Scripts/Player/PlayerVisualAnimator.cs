@@ -11,6 +11,7 @@ namespace Synaptrace.Player
             Run,
             Jump,
             Fall,
+            Land,
             WallSlide,
             WallJump,
             Phase,
@@ -20,6 +21,7 @@ namespace Synaptrace.Player
         [SerializeField] private PlayerController controller;
         [SerializeField] private float idleFrequency = 3f;
         [SerializeField] private float runFrequency = 14f;
+        [SerializeField] private float landingDuration = 0.14f;
 
         private readonly Dictionary<Transform, int> partIndices = new Dictionary<Transform, int>();
         private Transform[] parts;
@@ -37,11 +39,26 @@ namespace Synaptrace.Player
         private Transform helmet;
         private Transform leftShoulder;
         private Transform rightShoulder;
+        private Transform leftArm;
+        private Transform rightArm;
+        private Transform leftForearm;
+        private Transform rightForearm;
+        private Transform leftLeg;
+        private Transform rightLeg;
+        private Transform leftLowerLeg;
+        private Transform rightLowerLeg;
         private Transform leftBoot;
         private Transform rightBoot;
+        private Transform waist;
+        private Transform leftHipGuard;
+        private Transform rightHipGuard;
         private Transform core;
         private Transform phaseAura;
         private SpriteRenderer phaseAuraRenderer;
+        private float runCycle;
+        private float landingTimeRemaining;
+        private bool groundStateInitialized;
+        private bool wasGrounded;
         private bool visualsCached;
 
         public VisualState CurrentState { get; private set; }
@@ -69,8 +86,16 @@ namespace Synaptrace.Player
             }
 
             CacheVisuals();
+            UpdateLandingState();
             ResetVisuals();
+            VisualState previousState = CurrentState;
             CurrentState = ResolveState();
+
+            if (CurrentState == VisualState.Run && previousState != VisualState.Run)
+            {
+                runCycle = 0f;
+            }
+
             ApplyState(CurrentState);
             ApplyRendererFeedback(CurrentState);
         }
@@ -125,18 +150,65 @@ namespace Synaptrace.Player
                 baseColors[i] = renderers[i].color;
             }
 
-            cape = transform.Find("Crimson Tech Cape");
-            ponytail = transform.Find("Knight Ponytail");
-            body = transform.Find("Knight Armour Body");
-            helmet = transform.Find("Knight Helmet");
-            leftShoulder = transform.Find("Left Shoulder Plate");
-            rightShoulder = transform.Find("Right Shoulder Plate");
-            leftBoot = transform.Find("Left Armoured Boot");
-            rightBoot = transform.Find("Right Armoured Boot");
-            core = transform.Find("Chest Energy Core");
-            phaseAura = transform.Find("Phase Aura");
+            cape = FindPart("Crimson Tech Cape");
+            ponytail = FindPart("Knight Ponytail");
+            body = FindPart("Knight Armour Body");
+            helmet = FindPart("Knight Helmet");
+            leftShoulder = FindPart("Left Shoulder Plate");
+            rightShoulder = FindPart("Right Shoulder Plate");
+            leftArm = FindPart("Left Arm Rig");
+            rightArm = FindPart("Right Arm Rig");
+            leftForearm = FindPart("Left Forearm Rig");
+            rightForearm = FindPart("Right Forearm Rig");
+            leftLeg = FindPart("Left Leg Rig");
+            rightLeg = FindPart("Right Leg Rig");
+            leftLowerLeg = FindPart("Left Lower Leg Rig");
+            rightLowerLeg = FindPart("Right Lower Leg Rig");
+            leftBoot = FindPart("Left Armoured Boot");
+            rightBoot = FindPart("Right Armoured Boot");
+            waist = FindPart("Waist Guard");
+            leftHipGuard = FindPart("Left Hip Guard");
+            rightHipGuard = FindPart("Right Hip Guard");
+            core = FindPart("Chest Energy Core");
+            phaseAura = FindPart("Phase Aura");
             phaseAuraRenderer = phaseAura != null ? phaseAura.GetComponent<SpriteRenderer>() : null;
             visualsCached = true;
+        }
+
+        private Transform FindPart(string partName)
+        {
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].name == partName)
+                {
+                    return parts[i];
+                }
+            }
+
+            return null;
+        }
+
+        private void UpdateLandingState()
+        {
+            bool grounded = controller.IsGrounded;
+
+            if (!groundStateInitialized)
+            {
+                wasGrounded = grounded;
+                groundStateInitialized = true;
+                return;
+            }
+
+            if (grounded && !wasGrounded)
+            {
+                landingTimeRemaining = Mathf.Max(0.01f, landingDuration);
+            }
+            else
+            {
+                landingTimeRemaining = Mathf.Max(0f, landingTimeRemaining - Time.deltaTime);
+            }
+
+            wasGrounded = grounded;
         }
 
         private void ResetVisuals()
@@ -188,6 +260,11 @@ namespace Synaptrace.Player
                 return controller.CurrentVelocity.y > 0.15f ? VisualState.Jump : VisualState.Fall;
             }
 
+            if (landingTimeRemaining > 0f)
+            {
+                return VisualState.Land;
+            }
+
             return Mathf.Abs(controller.CurrentVelocity.x) > 0.15f ? VisualState.Run : VisualState.Idle;
         }
 
@@ -201,13 +278,16 @@ namespace Synaptrace.Player
                     ApplyIdle(time);
                     break;
                 case VisualState.Run:
-                    ApplyRun(time);
+                    ApplyRun();
                     break;
                 case VisualState.Jump:
                     ApplyJump();
                     break;
                 case VisualState.Fall:
                     ApplyFall();
+                    break;
+                case VisualState.Land:
+                    ApplyLand();
                     break;
                 case VisualState.WallSlide:
                     ApplyWallSlide();
@@ -230,28 +310,64 @@ namespace Synaptrace.Player
             SetRootPose(breath * 0.018f, 0f, 1f, 1f + breath * 0.012f);
             PosePart(cape, new Vector3(0f, breath * 0.01f, 0f), -4f + breath * 2f, Vector3.one);
             PosePart(ponytail, Vector3.zero, -8f + breath * 3f, Vector3.one);
+            PosePart(body, Vector3.zero, 0f, new Vector3(1f + breath * 0.008f, 1f, 1f));
+            PosePart(helmet, new Vector3(0f, breath * 0.004f, 0f), -breath * 0.5f, Vector3.one);
+            PosePart(leftArm, Vector3.zero, breath * 1.2f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, -breath * 1.2f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -7f + breath, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, 7f - breath, Vector3.one);
+            PosePart(leftHipGuard, Vector3.zero, breath, Vector3.one);
+            PosePart(rightHipGuard, Vector3.zero, -breath, Vector3.one);
             PosePart(core, Vector3.zero, 0f, Vector3.one * (1f + breath * 0.06f));
         }
 
-        private void ApplyRun(float time)
+        private void ApplyRun()
         {
-            float stride = Mathf.Sin(time * runFrequency);
+            float speedRatio = Mathf.Clamp(Mathf.Abs(controller.CurrentVelocity.x) / 7f, 0.7f, 1.25f);
+            runCycle += Time.deltaTime * runFrequency * speedRatio;
+            float stride = Mathf.Sin(runCycle);
             float bounce = Mathf.Abs(stride) * 0.035f;
-            SetRootPose(bounce, stride * 1.2f, 1f, 1f);
-            PosePart(leftBoot, new Vector3(stride * 0.045f, Mathf.Max(0f, stride) * 0.07f, 0f), stride * 8f, Vector3.one);
-            PosePart(rightBoot, new Vector3(-stride * 0.045f, Mathf.Max(0f, -stride) * 0.07f, 0f), -stride * 8f, Vector3.one);
-            PosePart(body, Vector3.zero, stride * 1.5f, Vector3.one);
+            float leftKneeBend = Mathf.Max(0f, -stride) * 34f;
+            float rightKneeBend = Mathf.Max(0f, stride) * 34f;
+
+            SetRootPose(bounce, -2.5f * controller.FacingDirection + stride * 0.6f, 1f, 1f);
+            PosePart(leftLeg, Vector3.zero, stride * 27f, Vector3.one);
+            PosePart(rightLeg, Vector3.zero, -stride * 27f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, leftKneeBend, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, rightKneeBend, Vector3.one);
+            PosePart(leftBoot, new Vector3(0f, Mathf.Max(0f, -stride) * 0.02f, 0f), -leftKneeBend * 0.45f, Vector3.one);
+            PosePart(rightBoot, new Vector3(0f, Mathf.Max(0f, stride) * 0.02f, 0f), -rightKneeBend * 0.45f, Vector3.one);
+            PosePart(leftArm, Vector3.zero, -stride * 24f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, stride * 24f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -10f - Mathf.Max(0f, stride) * 22f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, 10f + Mathf.Max(0f, -stride) * 22f, Vector3.one);
+            PosePart(body, Vector3.zero, stride * 1.2f, Vector3.one);
+            PosePart(helmet, Vector3.zero, -stride * 0.8f, Vector3.one);
             PosePart(cape, Vector3.zero, -13f - Mathf.Abs(stride) * 5f, Vector3.one);
             PosePart(ponytail, Vector3.zero, -18f - Mathf.Abs(stride) * 5f, Vector3.one);
             PosePart(leftShoulder, new Vector3(0f, stride * 0.015f, 0f), 0f, Vector3.one);
             PosePart(rightShoulder, new Vector3(0f, -stride * 0.015f, 0f), 0f, Vector3.one);
+            PosePart(leftHipGuard, Vector3.zero, stride * 3f, Vector3.one);
+            PosePart(rightHipGuard, Vector3.zero, -stride * 3f, Vector3.one);
         }
 
         private void ApplyJump()
         {
             SetRootPose(0.025f, -3f * controller.FacingDirection, 0.96f, 1.04f);
-            PosePart(leftBoot, new Vector3(0.035f, 0.09f, 0f), -8f, Vector3.one);
-            PosePart(rightBoot, new Vector3(-0.035f, 0.06f, 0f), 8f, Vector3.one);
+            PosePart(leftArm, Vector3.zero, -38f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, -26f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -24f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, -18f, Vector3.one);
+            PosePart(leftLeg, new Vector3(0.02f, 0.025f, 0f), 18f, Vector3.one);
+            PosePart(rightLeg, new Vector3(-0.015f, 0.015f, 0f), -13f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 44f, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 29f, Vector3.one);
+            PosePart(leftBoot, new Vector3(0.02f, 0.015f, 0f), -18f, Vector3.one);
+            PosePart(rightBoot, new Vector3(-0.015f, 0.01f, 0f), -12f, Vector3.one);
+            PosePart(leftShoulder, new Vector3(0f, 0.015f, 0f), -7f, Vector3.one);
+            PosePart(rightShoulder, new Vector3(0f, 0.01f, 0f), -5f, Vector3.one);
+            PosePart(leftHipGuard, Vector3.zero, 8f, Vector3.one);
+            PosePart(rightHipGuard, Vector3.zero, -6f, Vector3.one);
             PosePart(cape, Vector3.zero, 12f, Vector3.one);
             PosePart(ponytail, Vector3.zero, 18f, Vector3.one);
         }
@@ -259,17 +375,56 @@ namespace Synaptrace.Player
         private void ApplyFall()
         {
             SetRootPose(0f, 3f * controller.FacingDirection, 1.02f, 0.98f);
-            PosePart(leftBoot, new Vector3(-0.025f, -0.025f, 0f), 5f, Vector3.one);
-            PosePart(rightBoot, new Vector3(0.025f, -0.025f, 0f), -5f, Vector3.one);
+            PosePart(leftArm, Vector3.zero, -52f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, 48f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -18f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, 18f, Vector3.one);
+            PosePart(leftLeg, new Vector3(-0.015f, 0f, 0f), 13f, Vector3.one);
+            PosePart(rightLeg, new Vector3(0.015f, 0f, 0f), -13f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 18f, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 13f, Vector3.one);
+            PosePart(leftBoot, new Vector3(-0.015f, 0f, 0f), -7f, Vector3.one);
+            PosePart(rightBoot, new Vector3(0.015f, 0f, 0f), 7f, Vector3.one);
+            PosePart(helmet, Vector3.zero, 2f, Vector3.one);
+            PosePart(leftHipGuard, Vector3.zero, -6f, Vector3.one);
+            PosePart(rightHipGuard, Vector3.zero, 6f, Vector3.one);
             PosePart(cape, Vector3.zero, 22f, Vector3.one);
             PosePart(ponytail, Vector3.zero, 27f, Vector3.one);
+        }
+
+        private void ApplyLand()
+        {
+            float normalizedTime = Mathf.Clamp01(landingTimeRemaining / Mathf.Max(0.01f, landingDuration));
+            float impact = Mathf.Sin(normalizedTime * Mathf.PI * 0.5f);
+
+            SetRootPose(-0.035f * impact, 0f, 1f + impact * 0.075f, 1f - impact * 0.1f);
+            PosePart(leftArm, Vector3.zero, 12f * impact, Vector3.one);
+            PosePart(rightArm, Vector3.zero, -12f * impact, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -14f * impact, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, 14f * impact, Vector3.one);
+            PosePart(leftLeg, new Vector3(-0.01f * impact, 0.015f * impact, 0f), -7f * impact, Vector3.one);
+            PosePart(rightLeg, new Vector3(0.01f * impact, 0.015f * impact, 0f), 7f * impact, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 24f * impact, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 24f * impact, Vector3.one);
+            PosePart(waist, Vector3.zero, 0f, new Vector3(1f + impact * 0.04f, 1f - impact * 0.05f, 1f));
+            PosePart(cape, Vector3.zero, 10f * impact, Vector3.one);
+            PosePart(ponytail, Vector3.zero, 14f * impact, Vector3.one);
         }
 
         private void ApplyWallSlide()
         {
             SetRootPose(0f, -7f * controller.FacingDirection, 0.98f, 1.02f);
-            PosePart(leftBoot, new Vector3(0.025f, 0.045f, 0f), -7f, Vector3.one);
-            PosePart(rightBoot, new Vector3(-0.025f, 0.02f, 0f), 7f, Vector3.one);
+            PosePart(leftArm, Vector3.zero, -58f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, 18f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -18f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, 35f, Vector3.one);
+            PosePart(leftLeg, new Vector3(0.015f, 0.015f, 0f), 22f, Vector3.one);
+            PosePart(rightLeg, new Vector3(-0.01f, 0f, 0f), -8f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 45f, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 20f, Vector3.one);
+            PosePart(leftBoot, new Vector3(0.02f, 0.01f, 0f), -18f, Vector3.one);
+            PosePart(rightBoot, new Vector3(-0.01f, 0f, 0f), -8f, Vector3.one);
+            PosePart(leftShoulder, new Vector3(0f, 0.015f, 0f), -8f, Vector3.one);
             PosePart(cape, Vector3.zero, 28f, Vector3.one);
             PosePart(ponytail, Vector3.zero, 34f, Vector3.one);
         }
@@ -277,8 +432,16 @@ namespace Synaptrace.Player
         private void ApplyWallJump()
         {
             SetRootPose(0.02f, 11f * controller.FacingDirection, 1.08f, 0.94f);
-            PosePart(leftBoot, new Vector3(0.035f, 0.085f, 0f), -12f, Vector3.one);
-            PosePart(rightBoot, new Vector3(-0.035f, 0.065f, 0f), 12f, Vector3.one);
+            PosePart(leftArm, Vector3.zero, 48f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, -35f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, 18f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, -20f, Vector3.one);
+            PosePart(leftLeg, new Vector3(0.02f, 0.03f, 0f), -28f, Vector3.one);
+            PosePart(rightLeg, new Vector3(-0.02f, 0.02f, 0f), 20f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 55f, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 38f, Vector3.one);
+            PosePart(leftBoot, new Vector3(0.025f, 0.015f, 0f), -22f, Vector3.one);
+            PosePart(rightBoot, new Vector3(-0.02f, 0.01f, 0f), -15f, Vector3.one);
             PosePart(cape, Vector3.zero, -25f, Vector3.one);
             PosePart(ponytail, Vector3.zero, -32f, Vector3.one);
         }
@@ -287,6 +450,14 @@ namespace Synaptrace.Player
         {
             float shimmer = Mathf.Sin(time * 45f) * 0.012f;
             SetRootPose(shimmer, 0f, 1.2f, 0.82f);
+            PosePart(leftArm, Vector3.zero, -68f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, -62f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -12f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, -10f, Vector3.one);
+            PosePart(leftLeg, new Vector3(0f, 0.015f, 0f), -12f, Vector3.one);
+            PosePart(rightLeg, new Vector3(0f, -0.005f, 0f), -7f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 8f, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 5f, Vector3.one);
             PosePart(cape, new Vector3(-0.08f, 0f, 0f), -32f, new Vector3(1.25f, 0.8f, 1f));
             PosePart(ponytail, new Vector3(-0.06f, 0f, 0f), -38f, new Vector3(1.2f, 0.85f, 1f));
             PosePart(phaseAura, Vector3.zero, 0f, new Vector3(1.28f, 0.92f, 1f));
@@ -296,6 +467,15 @@ namespace Synaptrace.Player
         {
             float pulse = Mathf.Sin(time * 4f) * 0.01f;
             SetRootPose(-0.035f + pulse, 5f * controller.FacingDirection, 1f, 0.96f);
+            PosePart(leftArm, Vector3.zero, 8f, Vector3.one);
+            PosePart(rightArm, Vector3.zero, -8f, Vector3.one);
+            PosePart(leftForearm, Vector3.zero, -16f, Vector3.one);
+            PosePart(rightForearm, Vector3.zero, 16f, Vector3.one);
+            PosePart(leftLeg, Vector3.zero, -5f, Vector3.one);
+            PosePart(rightLeg, Vector3.zero, 5f, Vector3.one);
+            PosePart(leftLowerLeg, Vector3.zero, 12f, Vector3.one);
+            PosePart(rightLowerLeg, Vector3.zero, 12f, Vector3.one);
+            PosePart(helmet, new Vector3(0f, -0.01f, 0f), 4f, Vector3.one);
             PosePart(cape, Vector3.zero, 12f, new Vector3(1f, 0.92f, 1f));
             PosePart(ponytail, Vector3.zero, 16f, Vector3.one);
         }

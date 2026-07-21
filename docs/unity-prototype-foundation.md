@@ -20,7 +20,7 @@ This document describes the first playable Unity foundation for Synaptrace, the 
 
 The prototype now has a cleaner, slightly futuristic visual identity:
 
-- The player is an original female gothic tech-knight with layered armour, shoulder plates, helmet, ponytail, crimson circuit-lined cape, neon visor, chest core, and armour runes.
+- The player is an original female gothic tech-knight with a narrower shoulder line, shaped chest armour, defined waist and hip guards, longer articulated limbs, helmet, ponytail, crimson circuit-lined cape, neon visor, chest core, and armour runes.
 - Platforms use dark panel bases, cyan top highlights, side edge glows, lower shadows, and segmented panel seams.
 - Hazards use red energy-field styling with spike silhouettes and warning strips.
 - The finish object is a cyan portal/data gate with pylons, a glow aura, and a central data core.
@@ -31,7 +31,7 @@ All current visuals are original procedural sprites generated at runtime by `Run
 
 ## Player animation and phase milestone
 
-`PlayerVisualAnimator` uses lightweight procedural transform and colour animation because the player is still generated at runtime. It reads public movement state without changing physics. Current visual states are idle, run, jump, fall, wall slide, wall jump, phase, and a generic disabled pose used when controls are locked.
+`PlayerVisualAnimator` uses lightweight procedural transform and colour animation because the player is still generated at runtime. The visual hierarchy now acts as a small rig: each arm has an upper-arm and forearm pivot, while each leg has upper-leg and lower-leg pivots plus an independently posed boot. It reads public movement state without changing physics. Current visual states are idle, run, jump, fall, landing, wall slide, wall jump, phase, and a generic disabled pose used when controls are locked. Run animation includes opposing arm and leg swings with knee flexion; jump and fall use different silhouettes; wall actions use braced/tucked poses; and landing briefly compresses the body and bends both knees.
 
 Pressing either `Shift` key starts a `0.22` second horizontal phase at speed `11` with a `0.8` second start-to-start cooldown. Direction follows current movement input or the last facing direction. The player collider remains solid against platforms and hazards; enemy contact logic alone treats the player as intangible during the phase. Hazards and the fall reset remain lethal.
 
@@ -125,7 +125,7 @@ No reinforcement learning is implemented yet. The current design keeps adaptatio
 ## Known limitations
 
 - There are no authored sprite sheets yet.
-- Player animation is procedural and intentionally first-pass; there are no authored clips or Animator Controller yet.
+- Player animation remains procedural; the runtime rig now has articulated elbows, knees, airborne poses, and landing feedback, but there are still no authored clips or Animator Controller.
 - Wall slide and wall jump are functional but intentionally simple; there is no wall coyote time, stamina, or wall-climb system yet.
 - Surface modifiers are structurally ready, but water, oil, wet-wall, and sticky-wall presets have not been authored into levels yet.
 - Platform and hazard visuals are generated from simple procedural sprites, not final art.
