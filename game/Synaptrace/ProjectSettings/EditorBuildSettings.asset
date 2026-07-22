@@ -8,6 +8,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Main.unity
     guid: a71e952c0a626cc41b23d1eeba1107a4
+  - enabled: 1
+    path: Assets/Scenes/RuinedTransitHub.unity
+    guid: 9676023cbc54d714ea0ab327ddfc45c9
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 3590b91b4603b465dbb4216d601bff33, type: 3}
   m_UseUCBPForAssetBundles: 0
