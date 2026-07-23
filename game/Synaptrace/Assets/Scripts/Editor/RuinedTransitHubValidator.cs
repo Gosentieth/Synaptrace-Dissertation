@@ -69,6 +69,7 @@ namespace Synaptrace.EditorTools
             RuinedTransitHubValidationReport report = new RuinedTransitHubValidationReport();
             ValidateFallbackScene(report);
             ValidateSingletons(report);
+            ValidatePresentation(report);
             ValidateStableIds(report);
             ValidateNoPrototypeBootstrapper(report);
             ValidateNoCompositeColliders(report);
@@ -81,6 +82,172 @@ namespace Synaptrace.EditorTools
             ValidateTriggers(report);
             ValidateRoutes(report);
             return report;
+        }
+
+        private static void ValidatePresentation(RuinedTransitHubValidationReport report)
+        {
+            Camera camera = Object.FindFirstObjectByType<Camera>();
+
+            if (camera != null)
+            {
+                if (!camera.orthographic || Mathf.Abs(camera.orthographicSize - RuinedTransitHubSceneGenerator.HubCameraOrthographicSize) > Tolerance)
+                {
+                    report.Error("Hub camera must use the generated orthographic framing size of " + RuinedTransitHubSceneGenerator.HubCameraOrthographicSize + ".");
+                }
+
+                if (RelativeLuminance(camera.backgroundColor) < 0.075f)
+                {
+                    report.Error("Hub camera background is too dark for greybox readability.");
+                }
+            }
+
+            PlayerVisualAnimator visualAnimator = Object.FindFirstObjectByType<PlayerVisualAnimator>();
+
+            if (visualAnimator == null || !visualAnimator.UsesAuthoredSprite || visualAnimator.AuthoredSpriteRenderer == null)
+            {
+                report.Error("Player must use the shared authored protagonist sprite presentation.");
+            }
+            else
+            {
+                SpriteRenderer renderer = visualAnimator.AuthoredSpriteRenderer;
+
+                if (renderer.sprite == null || AssetDatabase.GetAssetPath(renderer.sprite) != RuinedTransitHubSceneGenerator.ProtagonistMainSpritePath)
+                {
+                    report.Error("Player renderer is not initialized with synaptrace-protagonist-main.");
+                }
+
+                if (visualAnimator.AuthoredStaticSprite == null
+                    || AssetDatabase.GetAssetPath(visualAnimator.AuthoredStaticSprite) != RuinedTransitHubSceneGenerator.ProtagonistMainSpritePath)
+                {
+                    report.Error("Player visual must retain synaptrace-protagonist-main as its non-idle fallback.");
+                }
+
+                if (!visualAnimator.AuthoredSpriteNativeFacesRight
+                    || PlayerVisualAnimator.ResolveSpriteFlipX(1f, true, true)
+                    || !PlayerVisualAnimator.ResolveSpriteFlipX(-1f, true, false))
+                {
+                    report.Error("Protagonist facing mapping must show native-right art unflipped for positive movement and flipped for negative movement.");
+                }
+
+                if (renderer.sharedMaterial == null || renderer.sharedMaterial.shader == null || renderer.sharedMaterial.shader.name != "Sprites/Default")
+                {
+                    report.Error("Player sprite must use the unlit Sprites/Default material.");
+                }
+
+                PlayerController player = renderer.GetComponentInParent<PlayerController>();
+
+                if (player == null || player.transform.localScale.x < 0f)
+                {
+                    report.Error("Player root must remain positively scaled and must not be flipped for facing.");
+                }
+
+                Animator animator = visualAnimator.GetComponent<Animator>();
+
+                if (animator == null || animator.applyRootMotion)
+                {
+                    report.Error("Authored protagonist Animator must exist with root motion disabled.");
+                }
+
+                if (visualAnimator.transform.localPosition != Vector3.zero
+                    || renderer.transform.localPosition != Vector3.zero)
+                {
+                    report.Error("Authored protagonist visual children must remain at a constant zero local position.");
+                }
+            }
+
+            string[] obsoleteVisualParts =
+            {
+                "Visual Root - Tech Knight",
+                "Knight Armour Body",
+                "Knight Helmet",
+                "Crimson Tech Cape"
+            };
+
+            for (int i = 0; i < obsoleteVisualParts.Length; i++)
+            {
+                if (GameObject.Find(obsoleteVisualParts[i]) != null)
+                {
+                    report.Error("Obsolete procedural player visual is still present: " + obsoleteVisualParts[i]);
+                }
+            }
+
+            foreach (SpriteRenderer renderer in Object.FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None))
+            {
+                if (renderer.sharedMaterial == null || renderer.sharedMaterial.shader == null || renderer.sharedMaterial.shader.name != "Sprites/Default")
+                {
+                    report.Error(renderer.name + " must use the unlit Sprites/Default material.");
+                }
+            }
+
+            foreach (BoxCollider2D collider in Object.FindObjectsByType<BoxCollider2D>(FindObjectsSortMode.None))
+            {
+                if (!collider.name.StartsWith("THub_Geo_", System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                Transform fill = collider.transform.Find("Greybox Fill");
+                Transform edge = collider.transform.Find("Walkable Edge");
+
+                if (fill == null || edge == null)
+                {
+                    report.Error(collider.name + " is missing its generated filled-surface presentation.");
+                    continue;
+                }
+
+                SpriteRenderer fillRenderer = fill.GetComponent<SpriteRenderer>();
+                SpriteRenderer edgeRenderer = edge.GetComponent<SpriteRenderer>();
+
+                if (fillRenderer == null || edgeRenderer == null)
+                {
+                    report.Error(collider.name + " has an incomplete generated surface renderer.");
+                    continue;
+                }
+
+                Vector2 colliderSize = collider.bounds.size;
+                Vector2 fillSize = fillRenderer.bounds.size;
+                Vector2 edgeSize = edgeRenderer.bounds.size;
+
+                if (Mathf.Abs(fillSize.x - colliderSize.x) > 0.01f
+                    || Mathf.Abs(fillSize.y - colliderSize.y) > 0.01f)
+                {
+                    report.Error(collider.name + " fill renderer must cover the complete collider bounds.");
+                }
+
+                if (Mathf.Abs(edgeSize.x - colliderSize.x) > 0.01f || edgeSize.y < 0.095f)
+                {
+                    report.Error(collider.name + " walkable edge must remain clearly visible across the complete surface.");
+                }
+
+                if (fillRenderer.color.a < 0.95f
+                    || RelativeLuminance(fillRenderer.color) < RelativeLuminance(camera.backgroundColor) + 0.12f)
+                {
+                    report.Error(collider.name + " fill does not contrast sufficiently with the hub background.");
+                }
+            }
+
+            string[] requiredMarkers =
+            {
+                "THub_Deco_DoorHologram",
+                "THub_Deco_OptionalRouteMarkerA",
+                "THub_Deco_BasinRouteSignal",
+                "THub_Deco_DistrictSignalRed",
+                "THub_Deco_FacilitySeal",
+                "THub_Deco_FallResetSignal"
+            };
+
+            for (int i = 0; i < requiredMarkers.Length; i++)
+            {
+                if (GameObject.Find(requiredMarkers[i]) == null)
+                {
+                    report.Error("Missing readability marker: " + requiredMarkers[i]);
+                }
+            }
+        }
+
+        private static float RelativeLuminance(Color color)
+        {
+            return color.r * 0.2126f + color.g * 0.7152f + color.b * 0.0722f;
         }
 
         private static void ValidateFallbackScene(RuinedTransitHubValidationReport report)

@@ -112,8 +112,6 @@ namespace Synaptrace.Core
             playerObject.transform.position = position;
             playerObject.transform.SetParent(levelRoot, true);
 
-            GameObject visualRoot = CreatePlayerVisual(playerObject.transform);
-
             Rigidbody2D body = playerObject.AddComponent<Rigidbody2D>();
             body.gravityScale = 3.2f;
             body.interpolation = RigidbodyInterpolation2D.Interpolate;
@@ -127,8 +125,7 @@ namespace Synaptrace.Core
             int groundLayer = GetLayerOrDefault("Ground");
             controller.SetGroundLayers(1 << groundLayer);
 
-            PlayerVisualAnimator visualAnimator = visualRoot.AddComponent<PlayerVisualAnimator>();
-            visualAnimator.Configure(controller);
+            PlayerVisualFactory.Create(playerObject.transform, controller);
             return controller;
         }
 

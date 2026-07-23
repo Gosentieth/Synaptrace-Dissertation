@@ -22,6 +22,11 @@ namespace Synaptrace.Player
         [SerializeField] private float idleFrequency = 3f;
         [SerializeField] private float runFrequency = 14f;
         [SerializeField] private float landingDuration = 0.14f;
+        [SerializeField] private bool usesAuthoredSprite;
+        [SerializeField] private SpriteRenderer authoredSpriteRenderer;
+        [SerializeField] private Animator authoredSpriteAnimator;
+        [SerializeField] private Sprite authoredStaticSprite;
+        [SerializeField] private bool authoredSpriteNativeFacesRight = true;
 
         private readonly Dictionary<Transform, int> partIndices = new Dictionary<Transform, int>();
         private Transform[] parts;
@@ -62,6 +67,12 @@ namespace Synaptrace.Player
         private bool visualsCached;
 
         public VisualState CurrentState { get; private set; }
+        public bool UsesAuthoredSprite => usesAuthoredSprite;
+        public SpriteRenderer AuthoredSpriteRenderer => authoredSpriteRenderer;
+        public Sprite AuthoredStaticSprite => authoredStaticSprite;
+        public bool AuthoredSpriteNativeFacesRight => authoredSpriteNativeFacesRight;
+
+        public const string IdleAnimatorParameter = "IsIdle";
 
         private void Awake()
         {
@@ -87,9 +98,16 @@ namespace Synaptrace.Player
 
             CacheVisuals();
             UpdateLandingState();
-            ResetVisuals();
             VisualState previousState = CurrentState;
             CurrentState = ResolveState();
+
+            if (usesAuthoredSprite)
+            {
+                ApplyAuthoredSpritePresentation();
+                return;
+            }
+
+            ResetVisuals();
 
             if (CurrentState == VisualState.Run && previousState != VisualState.Run)
             {
@@ -104,6 +122,47 @@ namespace Synaptrace.Player
         {
             controller = newController;
             CacheVisuals();
+        }
+
+        public void ConfigureAuthoredSprite(
+            PlayerController newController,
+            SpriteRenderer spriteRenderer,
+            Animator spriteAnimator,
+            Sprite staticSprite,
+            bool nativeFacesRight)
+        {
+            controller = newController;
+            authoredSpriteRenderer = spriteRenderer;
+            authoredSpriteAnimator = spriteAnimator;
+            authoredStaticSprite = staticSprite;
+            authoredSpriteNativeFacesRight = nativeFacesRight;
+            usesAuthoredSprite = spriteRenderer != null;
+            CacheVisuals();
+
+            if (authoredSpriteRenderer != null)
+            {
+                authoredSpriteRenderer.sprite = authoredStaticSprite;
+                authoredSpriteRenderer.flipX = ResolveSpriteFlipX(
+                    controller != null ? controller.FacingDirection : 1f,
+                    authoredSpriteNativeFacesRight,
+                    authoredSpriteRenderer.flipX);
+            }
+        }
+
+        public static bool ResolveSpriteFlipX(float facingDirection, bool nativeFacesRight, bool currentFlipX, float deadZone = 0.1f)
+        {
+            if (Mathf.Abs(facingDirection) <= Mathf.Max(0f, deadZone))
+            {
+                return currentFlipX;
+            }
+
+            bool shouldFaceRight = facingDirection > 0f;
+            return nativeFacesRight ? !shouldFaceRight : shouldFaceRight;
+        }
+
+        public static bool ShouldPlayIdleAnimation(VisualState state)
+        {
+            return state == VisualState.Idle;
         }
 
         private void CacheVisuals()
@@ -510,6 +569,38 @@ namespace Synaptrace.Player
                     renderers[i].color = color;
                 }
             }
+        }
+
+        private void ApplyAuthoredSpritePresentation()
+        {
+            if (authoredSpriteRenderer == null)
+            {
+                return;
+            }
+
+            authoredSpriteRenderer.flipX = ResolveSpriteFlipX(
+                controller.FacingDirection,
+                authoredSpriteNativeFacesRight,
+                authoredSpriteRenderer.flipX);
+
+            bool shouldPlayIdle = ShouldPlayIdleAnimation(CurrentState);
+
+            if (authoredSpriteAnimator != null)
+            {
+                authoredSpriteAnimator.SetBool(IdleAnimatorParameter, shouldPlayIdle);
+            }
+
+            if ((!shouldPlayIdle || authoredSpriteRenderer.sprite == null) && authoredStaticSprite != null)
+            {
+                authoredSpriteRenderer.sprite = authoredStaticSprite;
+            }
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                renderers[i].color = baseColors[i];
+            }
+
+            ApplyRendererFeedback(CurrentState);
         }
 
         private void SetRootPose(float yOffset, float rotationDegrees, float xScale, float yScale)

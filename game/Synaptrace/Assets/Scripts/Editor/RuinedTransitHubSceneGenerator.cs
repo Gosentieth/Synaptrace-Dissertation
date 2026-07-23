@@ -8,6 +8,7 @@ using Synaptrace.Telemetry;
 using Synaptrace.UI;
 using Synaptrace.World;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -25,6 +26,23 @@ namespace Synaptrace.EditorTools
         public const string FacilityRouteId = "route_hub_to_neural_facility";
         public const string MainDoorOpeningId = "opening_hub_main_door";
         public const string MandatoryJumpLinkId = "link_hub_intro_small_jump";
+        public const string ProtagonistArtFolder = "Assets/Art/Player/Protagonist/Resources/Synaptrace/Player";
+        public const string ProtagonistMainSpritePath = ProtagonistArtFolder + "/synaptrace-protagonist-main.png";
+        public const string ProtagonistStaticClipPath = "Assets/Animations/Player/ProtagonistStatic.anim";
+        public const string ProtagonistIdleClipPath = "Assets/Animations/Player/ProtagonistIdleBreathing.anim";
+        public const string ProtagonistControllerPath = "Assets/Animations/Player/Resources/Synaptrace/Player/Protagonist.controller";
+        public const float ProtagonistPixelsPerUnit = 160f;
+        public const float HubCameraOrthographicSize = 3f;
+
+        private static readonly string[] ProtagonistIdleSpritePaths =
+        {
+            ProtagonistArtFolder + "/synaptrace-protagonist-idle-01.png",
+            ProtagonistArtFolder + "/synaptrace-protagonist-idle-02.png",
+            ProtagonistArtFolder + "/synaptrace-protagonist-idle-03.png",
+            ProtagonistArtFolder + "/synaptrace-protagonist-idle-04.png",
+            ProtagonistArtFolder + "/synaptrace-protagonist-idle-05.png",
+            ProtagonistArtFolder + "/synaptrace-protagonist-idle-06.png"
+        };
 
         public static readonly Vector2 PlayerColliderSize = new Vector2(0.78f, 1.18f);
         public static readonly Vector2 PlayerClearanceSize = new Vector2(0.98f, 1.38f);
@@ -35,6 +53,7 @@ namespace Synaptrace.EditorTools
         public const float MandatoryGap = 1.2f;
 
         private static Sprite editorSprite;
+        private static Material editorUnlitMaterial;
 
         [MenuItem("Synaptrace/World/Generate Ruined Transit Hub")]
         public static void GenerateScene()
@@ -76,7 +95,14 @@ namespace Synaptrace.EditorTools
 
         public static void BuildSceneContents()
         {
+            EnsureProtagonistAssets();
             editorSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            editorUnlitMaterial = AssetDatabase.GetBuiltinExtraResource<Material>("Sprites-Default.mat");
+
+            if (editorSprite == null || editorUnlitMaterial == null)
+            {
+                throw new System.InvalidOperationException("Could not load Unity's built-in unlit sprite resources.");
+            }
 
             Transform root = CreateRoot("TransitHub_Root");
             AddStableId(root.gameObject, RegionId, WorldStableIdKind.Region);
@@ -126,7 +152,7 @@ namespace Synaptrace.EditorTools
                 "THub_Geo_DoorOverheadHeader",
                 new Vector2(8.5f, 1.875f),
                 new Vector2(2.8f, 0.45f));
-            TintRenderer(doorHeader.gameObject, new Color(0.16f, 0.18f, 0.2f, 1f));
+            TintRenderer(doorHeader.gameObject, new Color(0.3f, 0.32f, 0.34f, 1f));
 
             BoxCollider2D wreckageBlocker = CreateGround(
                 geometryRoot,
@@ -169,6 +195,16 @@ namespace Synaptrace.EditorTools
                 "THub_Geo_OptionalRejoinDrop",
                 new Vector2(23.35f, 0.725f),
                 new Vector2(1.5f, 0.4f));
+
+            Color optionalFill = new Color(0.24f, 0.42f, 0.43f, 1f);
+            Color optionalEdge = new Color(0.28f, 0.95f, 0.9f, 1f);
+            TintGround(optionalBase, optionalFill, optionalEdge);
+            TintGround(optionalLedgeA, optionalFill, optionalEdge);
+            TintGround(optionalLedgeB, optionalFill, optionalEdge);
+            TintGround(optionalRejoin, optionalFill, optionalEdge);
+            TintGround(wreckageBlocker, new Color(0.5f, 0.35f, 0.16f, 1f), new Color(1f, 0.65f, 0.2f, 1f));
+            TintGround(sunkenBlocker, new Color(0.42f, 0.19f, 0.21f, 1f), new Color(1f, 0.28f, 0.3f, 1f));
+            TintGround(facilityBlocker, new Color(0.42f, 0.18f, 0.35f, 1f), new Color(0.95f, 0.2f, 0.62f, 1f));
 
             CreatePlayer(playerRoot, new Vector3(0f, SpawnCenterY, 0f));
             CreateSpawn(metadataRoot, new Vector3(0f, SpawnCenterY, 0f));
@@ -229,9 +265,8 @@ namespace Synaptrace.EditorTools
             PlayerController controller = playerObject.AddComponent<PlayerController>();
             controller.ConfigureForEditor(1 << LayerMask.NameToLayer("Ground"));
 
-            GameObject visualRoot = CreatePlayerVisual(playerObject.transform);
-            PlayerVisualAnimator visualAnimator = visualRoot.AddComponent<PlayerVisualAnimator>();
-            visualAnimator.Configure(controller);
+            GameObject visualRoot = PlayerVisualFactory.Create(playerObject.transform, controller);
+            visualRoot.GetComponentInChildren<SpriteRenderer>().sharedMaterial = editorUnlitMaterial;
         }
 
         private static GameObject CreatePlayerVisual(Transform parent)
@@ -302,18 +337,18 @@ namespace Synaptrace.EditorTools
             GameObject cameraObject = new GameObject("Main Camera");
             cameraObject.transform.SetParent(parent, true);
             cameraObject.tag = "MainCamera";
-            cameraObject.transform.position = new Vector3(2.3f, 1.25f, -10f);
+            cameraObject.transform.position = new Vector3(1.4f, 1.65f, -10f);
 
             Camera camera = cameraObject.AddComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = 4.7f;
+            camera.orthographicSize = HubCameraOrthographicSize;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.045f, 0.05f, 0.055f, 1f);
+            camera.backgroundColor = new Color(0.105f, 0.09f, 0.075f, 1f);
             cameraObject.AddComponent<AudioListener>();
 
             CameraFollow2D cameraFollow = cameraObject.AddComponent<CameraFollow2D>();
             PlayerController player = Object.FindFirstObjectByType<PlayerController>();
-            cameraFollow.Configure(player.transform, new Vector3(1.4f, 1.2f, -10f), 6.5f, new Vector2(1.4f, 0.7f), new Vector2(25.5f, 2.8f));
+            cameraFollow.Configure(player.transform, new Vector3(1.4f, 1.05f, -10f), 6.5f, new Vector2(1.4f, -0.55f), new Vector2(25.5f, 2.65f));
         }
 
         private static void CreateFallReset(Transform parent)
@@ -379,15 +414,23 @@ namespace Synaptrace.EditorTools
 
         private static void CreateDecoration(Transform parent)
         {
-            CreateDecorationSprite(parent, "THub_Deco_SpawnCanopy", new Vector2(2f, 1.8f), new Vector2(5.4f, 1.2f), new Color(0.26f, 0.24f, 0.2f, 0.55f), -10);
-            CreateDecorationSprite(parent, "THub_Deco_BuriedRails_A", new Vector2(2.1f, 0.12f), new Vector2(5f, 0.12f), new Color(0.07f, 0.08f, 0.08f, 0.75f), -2);
-            CreateDecorationSprite(parent, "THub_Deco_DoorHologram", new Vector2(8.5f, 2.35f), new Vector2(1.5f, 0.3f), new Color(0.1f, 0.95f, 1f, 0.65f), 1);
-            CreateDecorationSprite(parent, "THub_Deco_ChamberBackWall", new Vector2(20.6f, 1.65f), new Vector2(6.6f, 3f), new Color(0.28f, 0.25f, 0.22f, 0.4f), -10);
-            CreateDecorationSprite(parent, "THub_Deco_NeuralSwitchboard", new Vector2(20.1f, 0.95f), new Vector2(1.5f, 1.1f), new Color(0.05f, 0.14f, 0.16f, 0.65f), -1);
-            CreateDecorationSprite(parent, "THub_Deco_BasinWindGate", new Vector2(26.8f, 1.65f), new Vector2(2f, 2.4f), new Color(0.55f, 0.42f, 0.24f, 0.42f), -1);
-            CreateDecorationSprite(parent, "THub_Deco_DistrictSignalRed", new Vector2(21.3f, 2.35f), new Vector2(1.2f, 0.3f), new Color(1f, 0.2f, 0.28f, 0.75f), 1);
-            CreateDecorationSprite(parent, "THub_Deco_FacilitySeal", new Vector2(18.7f, 2.2f), new Vector2(1.4f, 1.8f), new Color(0.8f, 0.08f, 0.48f, 0.4f), 1);
-            CreateDecorationSprite(parent, "THub_Deco_OptionalCableArch", new Vector2(20.2f, 2.45f), new Vector2(4f, 0.18f), new Color(0.05f, 0.8f, 0.8f, 0.45f), 0);
+            CreateDecorationSprite(parent, "THub_Deco_BackdropBand", new Vector2(13.6f, 1.8f), new Vector2(31f, 5.8f), new Color(0.13f, 0.125f, 0.115f, 1f), -30);
+            CreateDecorationSprite(parent, "THub_Deco_SpawnCanopy", new Vector2(2f, 1.8f), new Vector2(5.4f, 1.2f), new Color(0.39f, 0.32f, 0.22f, 0.72f), -10);
+            CreateDecorationSprite(parent, "THub_Deco_BuriedRails_A", new Vector2(2.1f, 0.12f), new Vector2(5f, 0.12f), new Color(0.75f, 0.54f, 0.27f, 0.8f), -2);
+            CreateDecorationSprite(parent, "THub_Deco_DoorHologram", new Vector2(8.5f, 2.35f), new Vector2(1.5f, 0.3f), new Color(0.16f, 1f, 1f, 0.9f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_DoorSignalLeft", new Vector2(7.05f, 0.85f), new Vector2(0.08f, 1.45f), new Color(0.16f, 0.86f, 0.9f, 0.9f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_DoorSignalRight", new Vector2(9.95f, 0.85f), new Vector2(0.08f, 1.45f), new Color(0.16f, 0.86f, 0.9f, 0.9f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_ChamberBackWall", new Vector2(20.6f, 1.65f), new Vector2(6.6f, 3f), new Color(0.31f, 0.29f, 0.25f, 0.82f), -10);
+            CreateDecorationSprite(parent, "THub_Deco_NeuralSwitchboard", new Vector2(20.1f, 0.95f), new Vector2(1.5f, 1.1f), new Color(0.07f, 0.3f, 0.32f, 0.86f), -1);
+            CreateDecorationSprite(parent, "THub_Deco_BasinWindGate", new Vector2(26.8f, 1.65f), new Vector2(2f, 2.4f), new Color(0.7f, 0.49f, 0.2f, 0.62f), -1);
+            CreateDecorationSprite(parent, "THub_Deco_BasinRouteSignal", new Vector2(26.8f, 2.55f), new Vector2(1.5f, 0.16f), new Color(1f, 0.68f, 0.22f, 1f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_DistrictSignalRed", new Vector2(21.3f, 2.35f), new Vector2(1.2f, 0.3f), new Color(1f, 0.22f, 0.26f, 1f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_FacilitySeal", new Vector2(18.7f, 2.2f), new Vector2(1.4f, 1.8f), new Color(0.88f, 0.13f, 0.52f, 0.64f), 1);
+            CreateDecorationSprite(parent, "THub_Deco_OptionalCableArch", new Vector2(20.2f, 2.45f), new Vector2(4f, 0.18f), new Color(0.12f, 0.92f, 0.86f, 0.88f), 1);
+            CreateDecorationSprite(parent, "THub_Deco_OptionalRouteMarkerA", new Vector2(17.4f, 1.02f), new Vector2(1.15f, 0.08f), new Color(0.25f, 1f, 0.9f, 1f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_OptionalRouteMarkerB", new Vector2(19.6f, 1.62f), new Vector2(1.25f, 0.08f), new Color(0.25f, 1f, 0.9f, 1f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_OptionalRouteMarkerC", new Vector2(21.8f, 2.02f), new Vector2(1.35f, 0.08f), new Color(0.25f, 1f, 0.9f, 1f), 2);
+            CreateDecorationSprite(parent, "THub_Deco_FallResetSignal", new Vector2(13.6f, -3.35f), new Vector2(31f, 0.12f), new Color(1f, 0.2f, 0.22f, 0.9f), 3);
         }
 
         private static BoxCollider2D CreateGround(Transform parent, string name, Vector2 position, Vector2 size)
@@ -401,8 +444,8 @@ namespace Synaptrace.EditorTools
             BoxCollider2D collider = ground.AddComponent<BoxCollider2D>();
             collider.size = size;
             ground.AddComponent<SurfaceModifier>();
-            CreateSprite(ground.transform, "Greybox Fill", Vector3.zero, new Vector3(size.x, size.y, 1f), new Color(0.33f, 0.34f, 0.34f, 1f), 0);
-            CreateSprite(ground.transform, "Walkable Edge", new Vector3(0f, size.y * 0.5f - 0.035f, 0f), new Vector3(size.x, 0.07f, 1f), new Color(0.1f, 0.95f, 1f, 1f), 1);
+            CreateSprite(ground.transform, "Greybox Fill", Vector3.zero, new Vector3(size.x, size.y, 1f), new Color(0.46f, 0.48f, 0.47f, 1f), 0);
+            CreateSprite(ground.transform, "Walkable Edge", new Vector3(0f, size.y * 0.5f - 0.05f, 0f), new Vector3(size.x, 0.1f, 1f), new Color(0.2f, 0.94f, 0.96f, 1f), 1);
             return collider;
         }
 
@@ -453,11 +496,22 @@ namespace Synaptrace.EditorTools
             GameObject spriteObject = new GameObject(name);
             spriteObject.transform.SetParent(parent, false);
             spriteObject.transform.localPosition = localPosition;
-            spriteObject.transform.localScale = localScale;
             SpriteRenderer renderer = spriteObject.AddComponent<SpriteRenderer>();
             renderer.sprite = editorSprite;
             renderer.color = color;
+            renderer.sharedMaterial = editorUnlitMaterial;
             renderer.sortingOrder = sortingOrder;
+            Vector2 spriteSize = editorSprite.bounds.size;
+
+            if (spriteSize.x <= 0f || spriteSize.y <= 0f)
+            {
+                throw new System.InvalidOperationException("The generated greybox sprite must have non-zero bounds.");
+            }
+
+            spriteObject.transform.localScale = new Vector3(
+                localScale.x / spriteSize.x,
+                localScale.y / spriteSize.y,
+                localScale.z);
             return spriteObject;
         }
 
@@ -494,6 +548,27 @@ namespace Synaptrace.EditorTools
             }
         }
 
+        private static void TintGround(Collider2D collider, Color fillColor, Color edgeColor)
+        {
+            if (collider == null)
+            {
+                return;
+            }
+
+            Transform fill = collider.transform.Find("Greybox Fill");
+            Transform edge = collider.transform.Find("Walkable Edge");
+
+            if (fill != null)
+            {
+                fill.GetComponent<SpriteRenderer>().color = fillColor;
+            }
+
+            if (edge != null)
+            {
+                edge.GetComponent<SpriteRenderer>().color = edgeColor;
+            }
+        }
+
         private static void SetSerializedString(Object target, string fieldName, string value)
         {
             SerializedObject serializedObject = new SerializedObject(target);
@@ -504,6 +579,245 @@ namespace Synaptrace.EditorTools
                 property.stringValue = value;
                 serializedObject.ApplyModifiedPropertiesWithoutUndo();
             }
+        }
+
+        private static void EnsureProtagonistAssets()
+        {
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            EnsureFolder("Assets", "Animations");
+            EnsureFolder("Assets/Animations", "Player");
+            EnsureFolder("Assets/Animations/Player", "Resources");
+            EnsureFolder("Assets/Animations/Player/Resources", "Synaptrace");
+            EnsureFolder("Assets/Animations/Player/Resources/Synaptrace", "Player");
+
+            ConfigureProtagonistTexture(ProtagonistMainSpritePath, 200, 200, new Vector2(0.4425f, 0.519f));
+
+            Vector2[] idlePivots =
+            {
+                new Vector2(0.5f, 0.4989796f),
+                new Vector2(0.5f, 0.4989796f),
+                new Vector2(0.5f, 0.4938776f),
+                new Vector2(0.5f, 0.4938776f),
+                new Vector2(0.5f, 0.4938776f),
+                new Vector2(0.5f, 0.4938776f)
+            };
+
+            Sprite[] idleSprites = new Sprite[ProtagonistIdleSpritePaths.Length];
+
+            for (int i = 0; i < ProtagonistIdleSpritePaths.Length; i++)
+            {
+                ConfigureProtagonistTexture(ProtagonistIdleSpritePaths[i], 196, 196, idlePivots[i]);
+                idleSprites[i] = LoadRequiredSprite(ProtagonistIdleSpritePaths[i]);
+            }
+
+            Sprite mainSprite = LoadRequiredSprite(ProtagonistMainSpritePath);
+            AnimationClip staticClip = CreateOrUpdateSpriteClip(
+                ProtagonistStaticClipPath,
+                "Protagonist Static",
+                new[] { mainSprite, mainSprite },
+                4f,
+                false);
+            AnimationClip idleClip = CreateOrUpdateSpriteClip(
+                ProtagonistIdleClipPath,
+                "Protagonist Idle Breathing",
+                idleSprites,
+                4f,
+                true);
+            CreateOrUpdateProtagonistController(staticClip, idleClip);
+            AssetDatabase.SaveAssets();
+        }
+
+        private static void ConfigureProtagonistTexture(string assetPath, int expectedWidth, int expectedHeight, Vector2 pivot)
+        {
+            TextureImporter importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+
+            if (importer == null)
+            {
+                throw new FileNotFoundException("Missing protagonist texture asset.", assetPath);
+            }
+
+            Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+
+            if (texture == null || texture.width != expectedWidth || texture.height != expectedHeight)
+            {
+                string actualSize = texture == null ? "unavailable" : texture.width + "x" + texture.height;
+                throw new System.InvalidOperationException(
+                    assetPath + " is " + actualSize + ", expected " + expectedWidth + "x" + expectedHeight + ".");
+            }
+
+            TextureImporterSettings textureSettings = new TextureImporterSettings();
+            importer.ReadTextureSettings(textureSettings);
+
+            bool changed = importer.textureType != TextureImporterType.Sprite
+                || importer.spriteImportMode != SpriteImportMode.Single
+                || !Mathf.Approximately(importer.spritePixelsPerUnit, ProtagonistPixelsPerUnit)
+                || textureSettings.spriteAlignment != (int)SpriteAlignment.Custom
+                || Vector2.Distance(textureSettings.spritePivot, pivot) > 0.0001f
+                || importer.filterMode != FilterMode.Point
+                || importer.textureCompression != TextureImporterCompression.Uncompressed
+                || importer.mipmapEnabled
+                || !importer.alphaIsTransparency
+                || importer.wrapMode != TextureWrapMode.Clamp
+                || importer.npotScale != TextureImporterNPOTScale.None;
+
+            if (!changed)
+            {
+                return;
+            }
+
+            textureSettings.spriteAlignment = (int)SpriteAlignment.Custom;
+            textureSettings.spritePivot = pivot;
+            textureSettings.spriteMeshType = SpriteMeshType.FullRect;
+            importer.SetTextureSettings(textureSettings);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spritePixelsPerUnit = ProtagonistPixelsPerUnit;
+            importer.alphaSource = TextureImporterAlphaSource.FromInput;
+            importer.alphaIsTransparency = true;
+            importer.filterMode = FilterMode.Point;
+            importer.mipmapEnabled = false;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.crunchedCompression = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.npotScale = TextureImporterNPOTScale.None;
+            importer.SaveAndReimport();
+        }
+
+        private static Sprite LoadRequiredSprite(string assetPath)
+        {
+            Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
+
+            if (sprite == null)
+            {
+                throw new System.InvalidOperationException("Could not load imported protagonist sprite at " + assetPath + ".");
+            }
+
+            return sprite;
+        }
+
+        private static AnimationClip CreateOrUpdateSpriteClip(string assetPath, string clipName, Sprite[] sprites, float frameRate, bool loop)
+        {
+            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
+
+            if (clip == null)
+            {
+                clip = new AnimationClip { name = clipName };
+                AssetDatabase.CreateAsset(clip, assetPath);
+                AssetDatabase.SetLabels(clip, new[] { "SynaptraceGenerated" });
+            }
+            else
+            {
+                RequireGeneratedAsset(clip, assetPath);
+            }
+
+            clip.ClearCurves();
+            clip.frameRate = frameRate;
+
+            ObjectReferenceKeyframe[] keyframes = new ObjectReferenceKeyframe[sprites.Length];
+
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                keyframes[i] = new ObjectReferenceKeyframe { time = i / frameRate, value = sprites[i] };
+            }
+
+            EditorCurveBinding binding = new EditorCurveBinding
+            {
+                path = PlayerVisualFactory.SpriteObjectName,
+                type = typeof(SpriteRenderer),
+                propertyName = "m_Sprite"
+            };
+            AnimationUtility.SetObjectReferenceCurve(clip, binding, keyframes);
+            AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(clip);
+            settings.loopTime = loop;
+            AnimationUtility.SetAnimationClipSettings(clip, settings);
+            EditorUtility.SetDirty(clip);
+            return clip;
+        }
+
+        private static void CreateOrUpdateProtagonistController(AnimationClip staticClip, AnimationClip idleClip)
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ProtagonistControllerPath);
+
+            if (controller == null)
+            {
+                controller = AnimatorController.CreateAnimatorControllerAtPath(ProtagonistControllerPath);
+                AssetDatabase.SetLabels(controller, new[] { "SynaptraceGenerated" });
+            }
+            else
+            {
+                RequireGeneratedAsset(controller, ProtagonistControllerPath);
+            }
+
+            AnimatorControllerParameter[] existingParameters = controller.parameters;
+
+            for (int i = 0; i < existingParameters.Length; i++)
+            {
+                controller.RemoveParameter(existingParameters[i]);
+            }
+
+            controller.AddParameter(PlayerVisualAnimator.IdleAnimatorParameter, AnimatorControllerParameterType.Bool);
+
+            AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
+            AnimatorState staticState = FindOrCreateState(stateMachine, "Static");
+            AnimatorState idleState = FindOrCreateState(stateMachine, "Idle Breathing");
+            staticState.motion = staticClip;
+            idleState.motion = idleClip;
+            stateMachine.defaultState = staticState;
+            RemoveTransitions(staticState);
+            RemoveTransitions(idleState);
+
+            AnimatorStateTransition toIdle = staticState.AddTransition(idleState);
+            toIdle.hasExitTime = false;
+            toIdle.duration = 0f;
+            toIdle.AddCondition(AnimatorConditionMode.If, 0f, PlayerVisualAnimator.IdleAnimatorParameter);
+
+            AnimatorStateTransition toStatic = idleState.AddTransition(staticState);
+            toStatic.hasExitTime = false;
+            toStatic.duration = 0f;
+            toStatic.AddCondition(AnimatorConditionMode.IfNot, 0f, PlayerVisualAnimator.IdleAnimatorParameter);
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(stateMachine);
+        }
+
+        private static AnimatorState FindOrCreateState(AnimatorStateMachine stateMachine, string stateName)
+        {
+            ChildAnimatorState[] states = stateMachine.states;
+
+            for (int i = 0; i < states.Length; i++)
+            {
+                if (states[i].state.name == stateName)
+                {
+                    return states[i].state;
+                }
+            }
+
+            return stateMachine.AddState(stateName);
+        }
+
+        private static void RemoveTransitions(AnimatorState state)
+        {
+            AnimatorStateTransition[] transitions = state.transitions;
+
+            for (int i = 0; i < transitions.Length; i++)
+            {
+                state.RemoveTransition(transitions[i]);
+            }
+        }
+
+        private static void RequireGeneratedAsset(Object asset, string assetPath)
+        {
+            string[] labels = AssetDatabase.GetLabels(asset);
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                if (labels[i] == "SynaptraceGenerated")
+                {
+                    return;
+                }
+            }
+
+            throw new System.InvalidOperationException(
+                "Refusing to overwrite unowned asset at " + assetPath + ". Add the SynaptraceGenerated label only if it is generator-owned.");
         }
 
         private static void EnsureProjectLayers()
